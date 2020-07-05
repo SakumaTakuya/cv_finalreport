@@ -1,0 +1,15 @@
+#:kivy 1.11.1
+
+
+<DeepPlayer>:
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            ActionView:
+                ActionPrevious:
+                ActionButton:
+                    text: 'SELECT FILE'
+                    on_press: root.show_load()
+        VideoPlayer:
+            id: video
+            source: root.fn_video
