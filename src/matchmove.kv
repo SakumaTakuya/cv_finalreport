@@ -1,15 +1,52 @@
 #:kivy 1.11.1
+#: import CardTransition kivy.uix.screenmanager.CardTransition
 
+<RectDrawImage>:
 
-<DeepPlayer>:
+<SelectTargetScreen>:
     BoxLayout:
         orientation: "vertical"
+        RectDrawImage:
+            id: image
+            size_hint_y: 0.9
+            texture: root.texture
+            can_draw: root.is_loaded
+            on_add_point: root.add_pixels(*args)
+            on_complete: root.activate_next()
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: 0.1
+            Button:
+                id: select_button
+                text: "select image"
+                disabled: False
+                on_press: root.show_load()
+                on_press: image.clear()
+            Button:
+                id: next_button
+                text: "next >"
+                disabled: True
+                on_press: root.calculate_clip()
+
+<SelectDestinationScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        Image:
+            texture: root.texture
+
+<TestWidget>:
+    BoxLayout:
+        orientation: "vertical"
+        size: root.size
         ActionBar:
             ActionView:
                 ActionPrevious:
-                ActionButton:
-                    text: 'SELECT FILE'
-                    on_press: root.show_load()
-        VideoPlayer:
-            id: video
-            source: root.fn_video
+        ScreenManager:
+            transition: CardTransition()
+            SelectTargetScreen:
+                id: select_target
+                name: "select_target"
+                next_state: "test"
+            SelectDestinationScreen:
+                name: "test"
+                clip: select_target.clip
