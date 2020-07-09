@@ -71,5 +71,9 @@
                 on_leave: root.set_reference(self.cv_img, self.points)
             SelectDestinationScreen:
                 name: "select_dest"
-                next_state: "select_reference"
+                next_state: "select_target"
                 on_leave: root.set_destination(self.cv_img)
+            SelectDestinationScreen:
+                name: "select_target"
+                next_state: "select_reference"
+                on_leave: root.set_target(self.cv_img)

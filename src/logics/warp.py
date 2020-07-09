@@ -1,5 +1,5 @@
 import numpy as np
-from blend import cubic_blend, cubic_blend_2d
+from .blend import cubic_blend, cubic_blend_2d
 
 
 def warp_image_liner(
@@ -24,15 +24,9 @@ def warp_image_liner(
     move_right_top_x = from_right_top_x - width
     _, _, color_channel = image.shape
     ret = np.zeros(shape=(height, width, color_channel), dtype=np.uint8)
+    # numpyならmeshgridで書き換えられそう
     for i in range(height):
         for j in range(width):
-            # u, v = cubic_blend_2d(
-            #         i, j, 
-            #         move_left_bottom_x, move_left_bottom_y,
-            #         move_right_bottom_x, move_right_bottom_y,
-            #         move_left_top_x, move_left_top_y,
-            #         move_right_top_x, move_right_top_y,
-            #         i / height, j / width)
             v, u = cubic_blend_2d(
                     i, j, 
                     move_left_bottom_y, move_left_bottom_x,
@@ -56,6 +50,34 @@ def warp_image_liner(
                             v_ratio, u_ratio)
 
     return ret
+
+
+def replace_image(
+    reference,
+    source,
+    mat):
+    """
+        source * matして得られるreferenceのピクセルで置換
+    """
+    ref_h, ref_w, color_channel = reference.shape
+    src_h, src_w, color_channel = source.shape
+
+    ret = np.copy(source)
+    # meshgridで書き換えられそう
+    for i in range(src_h):
+        for j in range(src_w):
+            pos = mat @ np.array([i, j, 1])
+
+            # scale処理
+            pos = pos / pos[2]
+            if  pos[0] >= 0 and \
+                pos[0] < ref_h and \
+                pos[1] >= 0 and \
+                pos[1] < ref_w:
+                ret[i, j] = reference[pos[:2]]
+
+    return ret
+
 
 
 if __name__ == "__main__":
@@ -91,7 +113,7 @@ if __name__ == "__main__":
         *br,
         *tr,
         *tl,
-        128, 256)
+        160, 160)
 
     import cv2
     cv2.imwrite("start.png", img1)

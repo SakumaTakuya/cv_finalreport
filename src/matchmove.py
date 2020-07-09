@@ -17,7 +17,7 @@ import threading
 
 # from logics.clip import clip_image
 from logics.operation import cross, diff
-from logics.warp import warp_image_liner
+from logics.warp import warp_image_liner, replace_image
 from utils.format import cv2tex_format, tex2cv_format
 from utils.kivyevent import sleep, popup_task, forget
 from utils.mixin import SelectMixin, ImageSelectMixin
@@ -28,18 +28,6 @@ from widgets.image import RectDrawImage
 class SelectReferenceScreen(ImageSelectMixin, Screen):
     points = ListProperty([])
     next_state = StringProperty("")
-    # clip_data = None
-
-    # def __init__(self, **kwargs):
-    #     super().__init__(**kwargs)
-
-    # def get_clip(self):
-    #     return self.clip_data
-    
-    # def set_clip(self, value):
-    #     self.clip_data = value
-
-    # clip = AliasProperty(get_clip, set_clip)
 
     def add_pixels(self, widget, *uv):
         self.points.append(uv)
@@ -104,7 +92,6 @@ class TestWidget(Widget):
     def set_destination(self, dest):
         async def task():
             self.destination = dest
-            print(self.points, self.reference.shape, self.destination.shape)
             h, w, *_ = dest.shape
             self.reference = await popup_task(
                     "Calculationg...", 
@@ -116,13 +103,42 @@ class TestWidget(Widget):
                     *self.points[3],
                     h, w)
             sleep(0.333)
-            cv2.imwrite("to_ref.png", self.reference)
-
-        
         forget(task())
 
+    def set_target(self, target):
+        async def task():
+            self.target = target
+            self.reference = await popup_task(
+                "Calculationg...",
+                self.execute_image)
+        forget(task())
+
+    def execute_image(self):
+        sift = cv2.xfeatures2d.SURF_create()
+        ref_kp, ref_des = sift.detectAndCompute(self.reference, None)
+        frm_kp, frm_des = sift.detectAndCompute(self.target, None)
+
+        index_params = dict(algorithm=self.flann_index_kdtree, trees=5)
+        search_params = dict(checks=50)
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        matches = flann.knnMatch(frm_des, ref_des, k=2)
+
+        good = []
+        for m,n in matches:
+            if m.distance < 0.7*n.distance:
+                good.append(m)
+
+        if len(good) > self.min_match_count:
+            src_pts = np.float32([ frm_kp[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+            dst_pts = np.float32([ ref_kp[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+
+            # frameからreferenceの変換を取得する
+            H, *_ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            ret = replace_image(self.reference, self.target, H)
+            cv2.imwrite("result.png", ret)
+
     def set_video_source(self, source):
-        self.video_source = source
+        pass
 
 
     def execute(self):
@@ -130,25 +146,20 @@ class TestWidget(Widget):
         if not cap:
             return
 
-        content = ProgressBar(
-            value=0, 
-            max=cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.show_popup(content, "Calculating...")
         
         sift = cv2.SIFT()
-        kp1, des1 = sift.detectAndCompute(self.reference, None)
+        ref_kp, ref_des = sift.detectAndCompute(self.reference, None)
 
         while True:
             ret, frame = cap.read()
             if ret:
                 content.value += 1
-                kp2, des2 = sift.detectAndCompute(frame, None)
+                frm_kp, frm_des = sift.detectAndCompute(frame, None)
+
                 index_params = dict(algorithm=self.flann_index_kdtree, trees=5)
                 search_params = dict(checks=50)
-
                 flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-                matches = flann.knnMatch(des1,des2,k=2)
+                matches = flann.knnMatch(frm_des, ref_des, k=2)
 
                 good = []
                 for m,n in matches:
@@ -156,12 +167,13 @@ class TestWidget(Widget):
                         good.append(m)
 
                 if len(good) > self.min_match_count:
-                    src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-                    dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+                    src_pts = np.float32([ frm_kp[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+                    dst_pts = np.float32([ ref_kp[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
 
-                    M, *_ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                    h,w = img1.shape
-                    pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+                    # frameからreferenceの変換を取得する
+                    H, *_ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+
             else:
                 break
 
