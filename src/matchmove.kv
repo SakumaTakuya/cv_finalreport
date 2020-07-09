@@ -1,9 +1,7 @@
 #:kivy 1.11.1
-#: import CardTransition kivy.uix.screenmanager.CardTransition
+#: import NoTransition kivy.uix.screenmanager.NoTransition
 
-<RectDrawImage>:
-
-<SelectTargetScreen>:
+<SelectReferenceScreen>:
     BoxLayout:
         orientation: "vertical"
         RectDrawImage:
@@ -26,13 +24,36 @@
                 id: next_button
                 text: "next >"
                 disabled: True
-                on_press: root.calculate_clip()
+                on_press: root.go_next()
+
 
 <SelectDestinationScreen>:
     BoxLayout:
         orientation: "vertical"
-        Image:
-            texture: root.texture
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: 0.9
+            Image:
+                texture: root.texture
+                size_hint_x: 0.5
+            Image:
+                texture: root.texture
+                size_hint_x: 0.5
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: 0.1
+            Button:
+                id: select_button
+                text: "select image"
+                disabled: False
+                on_press: root.show_load()
+            Button:
+                id: next_button
+                text: "next >"
+                disabled: True
+                on_press: root.go_next()
+
+
 
 <TestWidget>:
     BoxLayout:
@@ -42,11 +63,13 @@
             ActionView:
                 ActionPrevious:
         ScreenManager:
-            transition: CardTransition()
-            SelectTargetScreen:
-                id: select_target
-                name: "select_target"
-                next_state: "test"
+            transition: NoTransition()
+            SelectReferenceScreen:
+                id: select_reference
+                name: "select_reference"
+                next_state: "select_dest"
+                on_leave: root.set_reference(self.cv_img, self.points)
             SelectDestinationScreen:
-                name: "test"
-                clip: select_target.clip
+                name: "select_dest"
+                next_state: "select_reference"
+                on_leave: root.set_destination(self.cv_img)
