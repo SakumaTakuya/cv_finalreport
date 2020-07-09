@@ -4,51 +4,56 @@ from blend import cubic_blend, cubic_blend_2d
 
 def warp_image_liner(
     image,
-    from_left_bottom_x, 
     from_left_bottom_y, 
-    from_right_bottom_x,
+    from_left_bottom_x, 
     from_right_bottom_y,
-    from_right_top_x, 
-    from_right_top_y,
-    from_left_top_x, 
+    from_right_bottom_x,
+    from_right_top_y, 
+    from_right_top_x,
     from_left_top_y, 
-    width,
-    height):
-    move_left_bottom_x = from_left_bottom_x - 0
+    from_left_top_x, 
+    height,
+    width):
     move_left_bottom_y = from_left_bottom_y - 0
-    move_right_bottom_x = from_right_bottom_x - width
+    move_left_bottom_x = from_left_bottom_x - 0
     move_right_bottom_y = from_right_bottom_y - 0
-    move_left_top_x = from_left_top_x - 0
+    move_right_bottom_x = from_right_bottom_x - width
     move_left_top_y = from_left_top_y - height
-    move_right_top_x = from_right_top_x - width
+    move_left_top_x = from_left_top_x - 0
     move_right_top_y = from_right_top_y - height
+    move_right_top_x = from_right_top_x - width
     _, _, color_channel = image.shape
-    ret = np.zeros(shape=(width, height, color_channel), dtype=np.uint8)
-    for i in range(width):
-        for j in range(height):
-            u, v = cubic_blend_2d(
+    ret = np.zeros(shape=(height, width, color_channel), dtype=np.uint8)
+    for i in range(height):
+        for j in range(width):
+            # u, v = cubic_blend_2d(
+            #         i, j, 
+            #         move_left_bottom_x, move_left_bottom_y,
+            #         move_right_bottom_x, move_right_bottom_y,
+            #         move_left_top_x, move_left_top_y,
+            #         move_right_top_x, move_right_top_y,
+            #         i / height, j / width)
+            v, u = cubic_blend_2d(
                     i, j, 
-                    move_left_bottom_x, move_left_bottom_y,
-                    move_right_bottom_x, move_right_bottom_y,
-                    move_left_top_x, move_left_top_y,
-                    move_right_top_x, move_right_top_y,
-                    i / width, j / height)
+                    move_left_bottom_y, move_left_bottom_x,
+                    move_right_bottom_y, move_right_bottom_x,
+                    move_left_top_y, move_left_top_x,
+                    move_right_top_y, move_right_top_x,
+                    i / height, j / width)
             left = int(u)
             right = left+1
             bottom = int(v)
             top = bottom+1
             u_ratio = u - left
             v_ratio = v - bottom
-
-            # print(i, j, u, v)
             
             ret[i, j] = cubic_blend(
                             0, 
-                            image[left, bottom],
-                            image[right, bottom],
-                            image[left, top],
-                            image[right, top],
-                            u_ratio, v_ratio)
+                            image[bottom, left],
+                            image[bottom, right],
+                            image[top, left],
+                            image[top, right],
+                            v_ratio, u_ratio)
 
     return ret
 
@@ -86,7 +91,7 @@ if __name__ == "__main__":
         *br,
         *tr,
         *tl,
-        100, 100)
+        128, 256)
 
     import cv2
     cv2.imwrite("start.png", img1)

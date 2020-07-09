@@ -21,20 +21,38 @@ def cubic_blend(
         + cross_ratio * (left_top * left_ratio + right_top * right_ratio)
 
 
+# def cubic_blend_2d(
+#     value_x,
+#     value_y,
+#     left_bottom_x, 
+#     left_bottom_y, 
+#     right_bottom_x,
+#     right_bottom_y,
+#     left_top_x, 
+#     left_top_y, 
+#     right_top_x, 
+#     right_top_y, 
+#     x_ratio, 
+#     y_ratio):
+#     return (
+#         cubic_blend(value_x, left_bottom_x, right_bottom_x, left_top_x, right_top_x, x_ratio, y_ratio),
+#         cubic_blend(value_y, left_bottom_y, left_top_y, right_bottom_y, right_top_y, y_ratio, x_ratio)
+#     )
+
 def cubic_blend_2d(
-    value_x,
     value_y,
-    left_bottom_x, 
+    value_x,
     left_bottom_y, 
-    right_bottom_x,
+    left_bottom_x, 
     right_bottom_y,
-    left_top_x, 
+    right_bottom_x,
     left_top_y, 
-    right_top_x, 
+    left_top_x, 
     right_top_y, 
-    x_ratio, 
-    y_ratio):
+    right_top_x, 
+    y_ratio, 
+    x_ratio):
     return (
-        cubic_blend(value_x, left_bottom_x, right_bottom_x, left_top_x, right_top_x, x_ratio, y_ratio),
-        cubic_blend(value_y, left_bottom_y, left_top_y, right_bottom_y, right_top_y, y_ratio, x_ratio)
+        cubic_blend(value_y, left_bottom_y, left_top_y, right_bottom_y, right_top_y, y_ratio, x_ratio),
+        cubic_blend(value_x, left_bottom_x, right_bottom_x, left_top_x, right_top_x, x_ratio, y_ratio)
     )

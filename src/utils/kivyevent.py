@@ -56,7 +56,6 @@ async def popup_task(title, func, *args, **kwargs):
     content = ProgressBar(value=0.7, max=1)
     popup = Popup(title=title, content=content, size_hint=(.8, .1))
     popup.open()
-    print(args, kwargs)
     result = await thread(func, *args, **kwargs)
     popup.dismiss()
     return result

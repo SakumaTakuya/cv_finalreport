@@ -15,7 +15,7 @@ import os
 import time
 import threading
 
-from logics.clip import clip_image
+# from logics.clip import clip_image
 from logics.operation import cross, diff
 from logics.warp import warp_image_liner
 from utils.format import cv2tex_format, tex2cv_format
@@ -43,6 +43,9 @@ class SelectReferenceScreen(ImageSelectMixin, Screen):
 
     def add_pixels(self, widget, *uv):
         self.points.append(uv)
+
+    def remove_pixels(self):
+        self.points.pop(-1)
 
     def go_next(self):
         self.manager.current = self.next_state
@@ -101,7 +104,8 @@ class TestWidget(Widget):
     def set_destination(self, dest):
         async def task():
             self.destination = dest
-            w, h, *_ = dest.shape
+            print(self.points, self.reference.shape, self.destination.shape)
+            h, w, *_ = dest.shape
             self.reference = await popup_task(
                     "Calculationg...", 
                     warp_image_liner,
@@ -110,9 +114,10 @@ class TestWidget(Widget):
                     *self.points[1],
                     *self.points[2],
                     *self.points[3],
-                    w, h)
+                    h, w)
             sleep(0.333)
-            cv.imwrite("test.png", self.reference)
+            cv2.imwrite("to_ref.png", self.reference)
+
         
         forget(task())
 
