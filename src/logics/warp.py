@@ -74,7 +74,7 @@ def replace_image(
                 pos[0] < ref_h and \
                 pos[1] >= 0 and \
                 pos[1] < ref_w:
-                ret[i, j] = reference[pos[:2]]
+                ret[i, j] = reference[int(pos[0]), int(pos[1])]
 
     return ret
 

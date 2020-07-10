@@ -81,20 +81,26 @@ class SelectTargetScreen(SelectMixin, Screen):
 class TestWidget(Widget):
     min_match_count = 10
     flann_index_kdtree = 0
+    image_size = 256
 
     def __init__(self):
         super().__init__()
 
     def set_reference(self, reference, points):
-        self.reference = reference
+        h, w, *_ = reference.shape
+        self.reference = cv2.resize(
+            reference, 
+            (self.image_size, self.image_size * w // h))
         self.points = points
 
     def set_destination(self, dest):
         async def task():
-            self.destination = dest
             h, w, *_ = dest.shape
+            self.destination = cv2.resize(
+                dest,
+                (self.image_size, self.image_size * w // h))
             self.reference = await popup_task(
-                    "Calculationg...", 
+                    "Calculating...", 
                     warp_image_liner,
                     self.reference, 
                     *self.points[0],
@@ -102,19 +108,25 @@ class TestWidget(Widget):
                     *self.points[2],
                     *self.points[3],
                     h, w)
-            sleep(0.333)
+            await sleep(0.333)
         forget(task())
 
     def set_target(self, target):
         async def task():
-            self.target = target
-            self.reference = await popup_task(
-                "Calculationg...",
+            h, w, *_ = target.shape
+            self.target = cv2.resize(
+                target,
+                (self.image_size, self.image_size * w // h))
+            await popup_task(
+                "Calculating...",
                 self.execute_image)
         forget(task())
 
     def execute_image(self):
-        sift = cv2.xfeatures2d.SURF_create()
+        cv2.imwrite("reference.png", self.reference)
+        cv2.imwrite("target.png", self.target)
+        cv2.imwrite("destination.png", self.destination)
+        sift = cv2.xfeatures2d.SIFT_create()
         ref_kp, ref_des = sift.detectAndCompute(self.reference, None)
         frm_kp, frm_des = sift.detectAndCompute(self.target, None)
 
@@ -133,9 +145,31 @@ class TestWidget(Widget):
             dst_pts = np.float32([ ref_kp[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
 
             # frameからreferenceの変換を取得する
-            H, *_ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            ret = replace_image(self.reference, self.target, H)
+            H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            ret = replace_image(self.destination, self.target, H)
             cv2.imwrite("result.png", ret)
+            
+            # matchesMask = mask.ravel().tolist()
+
+            # h, w, *_ = self.target.shape
+            # pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+            # dst = cv2.perspectiveTransform(pts, H)
+
+            # frame = cv2.polylines(self.target,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+            # draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+            #                 singlePointColor = None,
+            #                 matchesMask = matchesMask, # draw only inliers
+            #                 flags = 2)
+
+            # img3 = cv2.drawMatches(
+            #     self.reference,
+            #     ref_kp,
+            #     frame,
+            #     frm_kp,
+            #     good,
+            #     None,
+            #     **draw_params)
+            # cv2.imwrite("sift.png", img3)
 
     def set_video_source(self, source):
         pass
@@ -146,7 +180,6 @@ class TestWidget(Widget):
         if not cap:
             return
 
-        
         sift = cv2.SIFT()
         ref_kp, ref_des = sift.detectAndCompute(self.reference, None)
 
