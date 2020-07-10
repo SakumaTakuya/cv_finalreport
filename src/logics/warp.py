@@ -44,8 +44,8 @@ def warp_image_liner(
             ret[i, j] = cubic_blend(
                             0, 
                             image[bottom, left],
-                            image[bottom, right],
                             image[top, left],
+                            image[bottom, right],
                             image[top, right],
                             v_ratio, u_ratio)
 
@@ -66,7 +66,7 @@ def replace_image(
     # meshgridで書き換えられそう
     for i in range(src_h):
         for j in range(src_w):
-            pos = mat @ np.array([i, j, 1])
+            pos = mat @ np.array([j, i, 1])
 
             # scale処理
             pos = pos / pos[2]

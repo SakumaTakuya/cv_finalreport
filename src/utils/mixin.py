@@ -1,6 +1,6 @@
 import cv2
 from kivy.graphics.texture import Texture
-from kivy.properties import ObjectProperty, StringProperty, ListProperty, BooleanProperty, AliasProperty
+from kivy.properties import ObjectProperty, StringProperty, ListProperty, BooleanProperty, AliasProperty, NumericProperty
 from kivy.uix.popup import Popup
 
 from utils.format import cv2tex_format
@@ -30,6 +30,7 @@ class SelectMixin:
 class ImageSelectMixin(SelectMixin):
     texture = ObjectProperty(None)
     is_loaded = BooleanProperty(False)
+    image_size = NumericProperty(512)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -38,6 +39,10 @@ class ImageSelectMixin(SelectMixin):
 
     def load_texture(self, filename):
         img = cv2tex_format(cv2.imread(filename[0]))
+        h, w, *_ = img.shape
+        img = cv2.resize(
+            img,
+            (self.image_size, self.image_size * h // w)) 
 
         self.cv_img = img
         self.texture = Texture.create(size=(img.shape[1], img.shape[0]))
