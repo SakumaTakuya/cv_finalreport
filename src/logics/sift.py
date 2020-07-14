@@ -4,13 +4,10 @@
         https://www.slideshare.net/hironobufujiyoshi/miru2013sift
     scale space for sift:
         https://qiita.com/JunyaKaneko/items/e3b5e4d4c249847e9b5f
+    あきらめたので動かない
 """
 import numpy as np
 from scipy import ndimage
-
-
-def luminance(x):
-    return x[:,:,0] + x[:,:,1] + x[:,:,2]
 
 
 def normalize(v, axis=-1, order=2):
