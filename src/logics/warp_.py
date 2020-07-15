@@ -92,7 +92,7 @@ def replace_image(
             pos = mat @ np.array([j, i, 1])
 
             # scale処理
-            pos = (pos // pos[2]).astype(np.int16)
+            pos = pos // pos[2]
             if  pos[0] >= 0 and \
                 pos[0] < ref_h and \
                 pos[1] >= 0 and \
@@ -219,23 +219,29 @@ def warp(
     return_height,
     return_width):
 
+    bb = np.zeros(shape=(return_height, return_width))
     # 任意の点から各辺への距離(d)とその垂線の足が辺のどのあたりに位置しているかの割合(t)
-    def td(f, t):
+    def td(f, t, s=False):
         a = np.array([f, t])
         dif = np.diff(a, axis=0)[0]
         det = np.linalg.det(a)
         sq = dif @ dif
-        def ret(x):
+        print(dif[1])
+
+        def ret(x, i=0, j=0):
             up = (dif[1] * x[0] - dif[0] * x[1] - det)
             r = -up / sq
-            h_dif = f[:,None,None] - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]])
-            return np.sqrt(np.sum(h_dif**2, axis=0) / sq), (np.abs(up) / np.sqrt(sq))
+            h_dif = f - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]]) 
+            if s:
+                bb[i, j] = h_dif @ h_dif / sq
+            return np.sqrt(h_dif @ h_dif / sq), np.abs(up) / np.sqrt(sq) 
         return ret
+
     print(to_bottom_left, to_bottom_right)
     td_bottom = td(to_bottom_left, to_bottom_right)
     td_top = td(to_top_left, to_top_right)
     td_left = td(to_bottom_left, to_top_left)
-    td_right = td(to_bottom_right, to_top_right)
+    td_right = td(to_bottom_right, to_top_right, True)
 
     # 各頂点の移動量を計算
     move_bottom_left = from_bottom_left - to_bottom_left
@@ -244,51 +250,70 @@ def warp(
     move_top_right = from_top_right - to_top_right
 
     h, w, color_channel = image.shape
+    ret = np.zeros(shape=(return_height, return_width, color_channel), dtype=np.uint8)
+    reb = np.zeros(shape=(return_height, return_width))
+    rett = np.zeros(shape=(return_height, return_width))
+    rel = np.zeros(shape=(return_height, return_width))
+    rer = np.zeros(shape=(return_height, return_width))
+    for i in range(return_height):
+        for j in range(return_width):
+            pos = np.array([i, j])
+            t_bottom, d_bottom = td_bottom(pos)
+            t_top, d_top = td_top(pos)
+            t_left, d_left = td_left(pos)
+            t_right, d_right = td_right(pos, i, j)
 
-    def create(i, j):
-        pos = np.array([i, j])
-        t_bottom, d_bottom = td_bottom(pos)
-        t_top, d_top = td_top(pos)
-        t_left, d_left = td_left(pos)
-        t_right, d_right = td_right(pos)
+            reb[i, j] = d_bottom
+            rett[i, j] = d_top
+            rer[i, j] = d_right
+            rel[i, j] = d_left
+            
 
-        t_vert = d_bottom / (d_bottom + d_top)
-        t_hori = d_left / (d_left + d_right)
+            if  (t_bottom < 0 or t_bottom > 1) and \
+                (t_top < 0 or t_top > 1) and \
+                (t_left < 0 or t_left > 1) and \
+                (t_right < 0 or t_right > 1):
+                continue
 
-        v = (i\
-            +((1 - t_bottom) * move_bottom_left[0] + t_bottom * move_bottom_right[0]) * (1 - t_vert)\
-            + ((1 - t_top) * move_top_left[0] + t_top * move_top_right[0]) * t_vert)
+            
+            t_vert = d_bottom / (d_bottom + d_top)
+            t_hori = d_left / (d_left + d_right)
 
-        u = (j\
-            + ((1 - t_left) * move_bottom_left[1] + t_left * move_top_left[1]) * (1 - t_hori)\
-            + ((1 - t_right) * move_bottom_right[1] + t_right * move_top_right[1]) * t_hori)
-        
-        v_int = v.astype(np.int16)
-        u_int = u.astype(np.int16)
-        bottom = np.where((v_int < 0) | (v_int > h-2), h-2, v_int)
-        left = np.where((u_int < 0) | (u_int > w-2), w-2, u_int)
-        top = bottom+1
-        right = left+1
-        v_ratio = (v - v_int)[:,:,None]
-        u_ratio = (u - u_int)[:,:,None]
+            v = i\
+                +((1 - t_bottom) * move_bottom_left[0] + t_bottom * move_bottom_right[0]) * (1 - t_vert)\
+                + ((1 - t_top) * move_top_left[0] + t_top * move_top_right[0]) * t_vert
 
-        return np.where((
-                ((t_bottom < 0) | (t_bottom > 1)) &\
-                ((t_top < 0) | (t_top > 1)) &\
-                ((t_left < 0) | (t_left > 1)) &\
-                ((t_right < 0) | (t_right > 1))
-            )[:,:,None],
-            0, 
-            cubic_blend(
-                    0, 
-                    image[bottom, left],
-                    image[top, left],
-                    image[bottom, right],
-                    image[top, right],
-                    v_ratio, u_ratio))
+            u = j\
+                + ((1 - t_left) * move_bottom_left[1] + t_left * move_top_left[1]) * (1 - t_hori)\
+                + ((1 - t_right) * move_bottom_right[1] + t_right * move_top_right[1]) * t_hori
 
+            bottom = int(v)
+            left = int(u)
+            if  bottom < 0 or bottom > w-2 or\
+                left < 0 or left > h-2:
+                continue
 
-    return np.fromfunction(create, shape=(return_height, return_width))
+            top = bottom+1
+            right = left+1
+            u_ratio = u - left
+            v_ratio = v - bottom
+
+            ret[i, j] = cubic_blend(
+                            0, 
+                            image[bottom, left],
+                            image[top, left],
+                            image[bottom, right],
+                            image[top, right],
+                            v_ratio, u_ratio)
+
+            # ret[i, j] = [0, 255, 255]
+    import cv2
+    cv2.imwrite("reb.png", ( ( reb+np.abs( np.min(reb) ) ) / np.max(reb) * 255))
+    cv2.imwrite("ret.png", ( ( rett+np.abs( np.min(rett) ) ) / np.max(rett) * 255))
+    cv2.imwrite("rer.png", ( ( rer+np.abs( np.min(rer) ) ) / np.max(rer) * 255))
+    cv2.imwrite("rel.png", ( ( rel+np.abs( np.min(rel) ) ) / np.max(rel) * 255))
+    cv2.imwrite("bb.png", ((bb+np.abs(np.min(bb))) / np.max(bb) * 255))
+    return ret
 
 if __name__ == "__main__":
     # siz = 160
@@ -330,33 +355,33 @@ if __name__ == "__main__":
     # cv2.imwrite("from.png", clip)
     # cv2.imwrite("to.png", ret)
 
-    fac = 10
+    siz = 160
     from operation import cross, diff
     import cv2
-    img1 = np.ones(shape=(15*fac, 16*fac, 3), dtype=np.uint8) * 255
-    bl = np.array((1, 2))*fac
-    br = np.array((0, 5))*fac
-    tr = np.array((6, 10))*fac
-    tl = np.array((6, 0))*fac
+    img1 = np.ones(shape=(siz, siz, 3), dtype=np.uint8) * 255
+    bl = np.array((10, 20))
+    br = np.array((0, 50))
+    tr = np.array((60, 100)) 
+    tl = np.array((60, 0))
 
     vec01 = diff(*br, *bl)
     vec12 = diff(*tr, *br)
     vec23 = diff(*tl, *tr)
     vec30 = diff(*bl, *tl)
-    clip = np.zeros(shape=(15*fac, 16*fac, 3), dtype=np.uint8)
+    clip = np.zeros(shape=(siz, siz, 3), dtype=np.uint8)
     rep = cv2.imread(r"C:\Users\Lab\Documents\sakuma\class\computervision\cv_finalreport\destination.png")
-    for i in range(15*fac):
-        for j in range(16*fac):
+    for i in range(siz):
+        for j in range(siz):
             if cross(*vec01, *diff(i, j, *bl)) < 0 and \
                 cross(*vec12, *diff(i, j, *br)) < 0 and \
                 cross(*vec23, *diff(i, j, *tr)) < 0 and \
                 cross(*vec30, *diff(i, j, *tl)) < 0:
                 clip[i, j] = rep[i, j]
 
-    to_bl = bl+(np.array([1,2])+5)*fac
-    to_br = br+(np.array([1,1])+5)*fac
-    to_tr = tr+(np.array([1,4])+5)*fac
-    to_tl = tl+(np.array([1,2])+5)*fac
+    to_bl = bl+np.array([10,20])+50
+    to_br = br+np.array([10,10])+50
+    to_tr = tr+np.array([10,40])+50
+    to_tl = tl+np.array([10,20])+50
     ret = warp(
         clip,
         bl,
@@ -367,7 +392,7 @@ if __name__ == "__main__":
         to_br,
         to_tr,
         to_tl,
-        26*fac, 26*fac)
+        260, 260)
 
     ret[to_bl[0], to_bl[1]] = [0,0,255]
     ret[to_br[0], to_br[1]] = [0,255,0]
@@ -376,4 +401,4 @@ if __name__ == "__main__":
 
     cv2.imwrite("start.png", img1)
     cv2.imwrite("from.png", clip)
-    cv2.imwrite("to2.png", ret)
+    cv2.imwrite("to.png", ret)
