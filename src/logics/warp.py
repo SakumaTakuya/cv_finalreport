@@ -1,5 +1,5 @@
 import numpy as np
-from blend import cubic_blend, cubic_blend_2d
+from .blend import cubic_blend, cubic_blend_2d
 
 
 def warp_image_liner(
@@ -62,55 +62,19 @@ def replace_image(
     ref_h, ref_w, color_channel = reference.shape
     src_h, src_w, color_channel = source.shape
 
-    # harris = cv2.cornerHarris(source, 2, 3, 0.04)
-    # inv = np.linalg.inv(mat)
-    # c_00 = (inv @ np.array([    0,    0,1])).astype(np.uint8)
-    # c_01 = (inv @ np.array([    0,ref_h,1])).astype(np.uint8)
-    # c_10 = (inv @ np.array([ref_w,    0,1])).astype(np.uint8)
-    # c_11 = (inv @ np.array([ref_w,ref_h,1])).astype(np.uint8)
+    def create(i, j):
+        pos = np.einsum('ij, jkl->ikl',
+            mat, np.array([j, i, np.ones(shape=j.shape)]))
+        pos = (pos[0:2] // pos[2]).astype(np.int16)
+        u = np.clip(pos[0], 0, ref_w-1)
+        v = np.clip(pos[1], 0, ref_h-1)
+        return np.where((
+            (pos[0] >= 0) & (pos[0] < ref_w) &\
+            (pos[1] >= 0) & (pos[1] < ref_h))[:,:,None],
+            reference[v, u],
+            source)
 
-    # radius = 10
-    # max_00 = np.argmax(harris[c_00[0]-radius:c_00[0]+radius, c_00[1]-radius:c_00[1]+radius])
-    # min_00 = np.argmin(harris[c_00[0]-radius:c_00[0]+radius, c_00[1]-radius:c_00[1]+radius])
-    # max_01 = np.argmax(harris[c_01[0]-radius:c_01[0]+radius, c_01[1]-radius:c_01[1]+radius])
-    # min_01 = np.argmin(harris[c_01[0]-radius:c_01[0]+radius, c_01[1]-radius:c_01[1]+radius])
-    # max_10 = np.argmax(harris[c_10[0]-radius:c_10[0]+radius, c_10[1]-radius:c_10[1]+radius])
-    # min_10 = np.argmin(harris[c_10[0]-radius:c_10[0]+radius, c_10[1]-radius:c_10[1]+radius])
-    # max_11 = np.argmax(harris[c_11[0]-radius:c_11[0]+radius, c_11[1]-radius:c_11[1]+radius])
-    # min_11 = np.argmin(harris[c_11[0]-radius:c_11[0]+radius, c_11[1]-radius:c_11[1]+radius])
-    
-    # thr = 0.01*harris.max()
-    # if harris[max_00] > thr:
-
-
-
-    ret = np.zeros(shape=source.shape)
-    ids = np.zeros(shape=(4,2))
-    # meshgridで書き換えられそう
-    for i in range(src_h):
-        for j in range(src_w):
-            pos = mat @ np.array([j, i, 1])
-
-            # scale処理
-            pos = (pos // pos[2]).astype(np.int16)
-            if  pos[0] >= 0 and \
-                pos[0] < ref_h and \
-                pos[1] >= 0 and \
-                pos[1] < ref_w:
-                ret[i, j] = reference[pos[0], pos[1]]
-            
-            if pos[0] == 0 and pos[1] == 0:
-                ids[0] = np.array([j, i])
-            if pos[0] == ref_h and pos[1] == 0:
-                ids[1] = np.array([j, i])
-            if pos[0] == 0 and pos[1] == ref_w:
-                ids[2] = np.array([j, i])
-            if pos[0] == ref_h and pos[1] == ref_w:
-                ids[3] = np.array([j, i])
-
-    return ret
-
-
+    return np.fromfunction(create, shape=(src_h, src_w))
 
 
 def warp_image(
@@ -231,7 +195,6 @@ def warp(
             h_dif = f[:,None,None] - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]])
             return np.sqrt(np.sum(h_dif**2, axis=0) / sq), (np.abs(up) / np.sqrt(sq))
         return ret
-    print(to_bottom_left, to_bottom_right)
     td_bottom = td(to_bottom_left, to_bottom_right)
     td_top = td(to_top_left, to_top_right)
     td_left = td(to_bottom_left, to_top_left)
@@ -243,7 +206,7 @@ def warp(
     move_top_left = from_top_left - to_top_left
     move_top_right = from_top_right - to_top_right
 
-    h, w, color_channel = image.shape
+    h, w, *_ = image.shape
 
     def create(i, j):
         pos = np.array([i, j])
@@ -280,12 +243,12 @@ def warp(
             )[:,:,None],
             0, 
             cubic_blend(
-                    0, 
-                    image[bottom, left],
-                    image[top, left],
-                    image[bottom, right],
-                    image[top, right],
-                    v_ratio, u_ratio))
+                0, 
+                image[bottom, left],
+                image[top, left],
+                image[bottom, right],
+                image[top, right],
+                v_ratio, u_ratio).astype(np.uint8))
 
 
     return np.fromfunction(create, shape=(return_height, return_width))
@@ -344,7 +307,7 @@ if __name__ == "__main__":
     vec23 = diff(*tl, *tr)
     vec30 = diff(*bl, *tl)
     clip = np.zeros(shape=(15*fac, 16*fac, 3), dtype=np.uint8)
-    rep = cv2.imread(r"C:\Users\Lab\Documents\sakuma\class\computervision\cv_finalreport\destination.png")
+    rep = cv2.imread(r"C:\Users\Lab\Pictures\Camera Roll\WIN_20200710_01_05_18_Pro.jpg")
     for i in range(15*fac):
         for j in range(16*fac):
             if cross(*vec01, *diff(i, j, *bl)) < 0 and \

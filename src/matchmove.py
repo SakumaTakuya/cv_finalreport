@@ -18,7 +18,7 @@ import threading
 # from logics.clip import clip_image
 from logics.operation import cross, diff
 from logics.matching import match_image, get_homography, match_points, detect_keypoint
-from logics.warp import warp_image_liner, replace_image
+from logics.warp import warp_image_liner, replace_image, warp
 from utils.file import get_save_path
 from utils.format import cv2tex_format, tex2cv_format
 from utils.kivyevent import sleep, popup_task, forget
@@ -91,7 +91,7 @@ class SelectTargetScreen(SelectMixin, Screen):
 class MatchMoveWidget(Widget):
     min_match_count = 10
     flann_index_kdtree = 0
-    video_width = 1024
+    video_width = 512
     fmt = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
 
     def save_to(self, to):
@@ -99,7 +99,7 @@ class MatchMoveWidget(Widget):
 
     def set_reference(self, reference, points):
         self.reference = reference
-        self.points = points
+        self.points = np.array(points)
 
     def set_destination(self, dest):
         async def task():
@@ -107,19 +107,26 @@ class MatchMoveWidget(Widget):
             h, w, *_ = dest.shape
             self.reference = await popup_task(
                     "Calculating...", 
-                    warp_image_liner,
+                    warp,
                     self.reference, 
-                    *self.points[0],
-                    *self.points[1],
-                    *self.points[2],
-                    *self.points[3],
-                    w, h)
+                    self.points[0],
+                    self.points[1],
+                    self.points[2],
+                    self.points[3],
+                    np.array([0, 0]),
+                    np.array([h, 0]),
+                    np.array([h, w]),
+                    np.array([0, w]),
+                    h, w)
+            cv2.imwrite(self.save_to("destination.png"), self.destination)
+            cv2.imwrite(self.save_to("reference.png"), self.reference)
             await sleep(0.333)
         forget(task())
 
     def set_target(self, target):
         async def task():
             self.target = target
+            cv2.imwrite(self.save_to("target.png"), self.target)
             await popup_task(
                 "Calculating...",
                 self.execute_image)
@@ -170,12 +177,16 @@ class MatchMoveWidget(Widget):
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
+                print("end process")
                 break
             
             frame = cv2.resize(frame, (self.video_width, self.video_width * h // w))
             frame = cv2tex_format(frame)
 
+            print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
             tar_kp, tar_des = detect_keypoint(frame)
+            
+            print(f"\rmatch frame: {i}\t\t\t\t", end="")
             src_pts, dst_pts = match_points(
                 ref_kp, ref_des, 
                 tar_kp, tar_des,
@@ -186,12 +197,11 @@ class MatchMoveWidget(Widget):
                 # frameからreferenceの変換を取得する
                 H = get_homography(src_pts, dst_pts)
 
-                frame = replace_image(self.destination, frame, H)
+                print(f"\rreplace frame: {i}\t\t\t\t", end="")
+                frame = replace_image(self.destination, frame, H).astype(np.uint8)
 
             writer.write(frame)
-
             i += 1
-            print(f"\rprocess frame: {i}", end="")
 
         writer.release()
         cap.release()
