@@ -85,13 +85,13 @@
             transition: NoTransition()
             SelectReferenceScreen:
                 id: select_reference
-                image_size: 256
+                image_size: 512
                 name: "select_reference"
                 next_state: "select_dest"
                 on_leave: root.set_reference(self.cv_img, self.points)
             SelectDestinationScreen:
                 name: "select_dest"
-                image_size: 256
+                image_size: 512
                 next_state: "select_target"
                 on_leave: root.set_destination(self.cv_img)
             SelectTargetScreen:

@@ -66,13 +66,65 @@ def replace_image(
         pos = np.einsum('ij, jkl->ikl',
             mat, np.array([j, i, np.ones(shape=j.shape)]))
         pos = (pos[0:2] // pos[2]).astype(np.int16)
-        u = np.clip(pos[0], 0, ref_w-1)
-        v = np.clip(pos[1], 0, ref_h-1)
-        return np.where((
-            (pos[0] >= 0) & (pos[0] < ref_w) &\
-            (pos[1] >= 0) & (pos[1] < ref_h))[:,:,None],
-            reference[v, u],
-            source)
+
+        pos_min_w = (0 <= pos[0]) & (pos[0] <= 5)
+        pos_min_h = (0 <= pos[1]) & (pos[1] <= 5)
+        pos_max_w = (ref_w-6 <= pos[0]) & (pos[0] <= ref_w-1)
+        pos_max_h = (ref_h-6 <= pos[1]) & (pos[1] <= ref_h-1)
+
+        # sourceの四つ角位置を出力
+        minw_minh_id = np.where(pos_min_w & pos_min_h) 
+        maxw_minh_id = np.where(pos_max_w & pos_min_h)
+        maxw_maxh_id = np.where(pos_max_w & pos_max_h)
+        minw_maxh_id = np.where(pos_min_w & pos_max_h)
+
+        if  minw_minh_id[0].size > 0 and minw_minh_id[1].size > 0 and\
+            maxw_minh_id[0].size > 0 and maxw_minh_id[1].size > 0 and\
+            maxw_maxh_id[0].size > 0 and maxw_maxh_id[1].size > 0 and\
+            minw_maxh_id[0].size > 0 and minw_maxh_id[1].size > 0:
+
+            minw_minh_id = np.array([minw_minh_id[0][0], minw_minh_id[1][0]])
+            maxw_minh_id = np.array([maxw_minh_id[0][0], maxw_minh_id[1][0]])
+            maxw_maxh_id = np.array([maxw_maxh_id[0][0], maxw_maxh_id[1][0]])
+            minw_maxh_id = np.array([minw_maxh_id[0][0], minw_maxh_id[1][0]])
+            # print(
+            #     np.array([0, 0]),
+            #     np.array([0, ref_w-1]),
+            #     np.array([ref_h-1, ref_w-1]),
+            #     np.array([ref_h-1, 0]),
+            #     minw_minh_id,
+            #     maxw_minh_id
+            #     maxw_maxh_id,
+            #     minw_maxh_id,
+            # )
+            # print(pos.shape, src_h, src_w)
+            # import cv2
+            # a = np.zeros(shape=(src_h, src_w, 3), dtype=np.uint8)
+            # a[minw_minh_id[0], minw_minh_id[1]] = [255, 255, 0] # <- BGR
+            # a[minw_maxh_id[0], minw_maxh_id[1]] = [255, 255, 255]
+            # a[maxw_maxh_id[0], maxw_maxh_id[1]] = [0, 255, 255]
+            # a[maxw_minh_id[0], maxw_minh_id[1]] = [255, 0, 255]
+            # cv2.imwrite("mask.png", a)
+            mask = warp(
+                reference,
+                np.array([0, 0]),
+                np.array([ref_h-1, 0]),
+                np.array([ref_h-1, ref_w-1]),
+                np.array([0, ref_w-1]),
+                minw_minh_id,
+                minw_maxh_id,
+                maxw_maxh_id,
+                maxw_minh_id,
+                src_h, src_w)
+            return mask
+        else:
+            u = np.clip(pos[0], 0, ref_w-1)
+            v = np.clip(pos[1], 0, ref_h-1)
+            return np.where((
+                (pos[0] >= 0) & (pos[0] < ref_w) &\
+                (pos[1] >= 0) & (pos[1] < ref_h))[:,:,None],
+                reference[v, u],
+                source)
 
     return np.fromfunction(create, shape=(src_h, src_w))
 
@@ -189,10 +241,11 @@ def warp(
         dif = np.diff(a, axis=0)[0]
         det = np.linalg.det(a)
         sq = dif @ dif
+        f = f[:,None,None]
         def ret(x):
             up = (dif[1] * x[0] - dif[0] * x[1] - det)
             r = -up / sq
-            h_dif = f[:,None,None] - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]])
+            h_dif = f - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]])
             return np.sqrt(np.sum(h_dif**2, axis=0) / sq), (np.abs(up) / np.sqrt(sq))
         return ret
     td_bottom = td(to_bottom_left, to_bottom_right)
@@ -209,7 +262,39 @@ def warp(
     h, w, *_ = image.shape
 
     def create(i, j):
+        nonlocal to_bottom_left, to_bottom_right, to_top_left, to_top_right
         pos = np.array([i, j])
+
+        # to_bottom_left = to_bottom_left
+        # to_bottom_right = to_bottom_right[:,None, None]
+        # to_top_left = to_top_left[:,None, None]
+        # to_top_right = to_top_right[:,None, None]
+
+        # print((to_bottom_right - to_bottom_left).shape)
+        # print((pos - to_bottom_left[:,None, None]).shape)
+
+        crs_bl = np.cross(
+            pos - to_bottom_left[:,None, None],
+            to_bottom_right - to_bottom_left,
+            axis=0)
+        crs_br = np.cross(
+            pos - to_bottom_right[:,None, None],
+            to_top_right - to_bottom_right, 
+            axis=0)
+        crs_tr = np.cross(
+            pos - to_top_right[:,None, None],
+            to_top_left - to_top_right, 
+            axis=0)
+        crs_tl = np.cross(
+            pos - to_top_left[:,None, None],
+            to_bottom_left - to_top_left, 
+            axis=0)
+
+        mask = np.where(
+            (crs_bl < 0) & (crs_br < 0) & (crs_tr < 0) & (crs_tl < 0), 
+            1, 0)
+        import cv2
+        cv2.imwrite("mask.png", mask*255)
         t_bottom, d_bottom = td_bottom(pos)
         t_top, d_top = td_top(pos)
         t_left, d_left = td_left(pos)
@@ -236,10 +321,14 @@ def warp(
         u_ratio = (u - u_int)[:,:,None]
 
         return np.where((
-                ((t_bottom < 0) | (t_bottom > 1)) &\
+                (mask == 0) |\
+                (((t_bottom < 0) | (t_bottom > 1)) &\
                 ((t_top < 0) | (t_top > 1)) &\
                 ((t_left < 0) | (t_left > 1)) &\
-                ((t_right < 0) | (t_right > 1))
+                ((t_right < 0) | (t_right > 1)) &\
+                ((t_vert < 0) | (t_vert > 1)) &\
+                ((t_hori < 0) | (t_hori > 1))) |\
+                ((v_int < 0) | (v_int > h-2) | (u_int < 0) | (u_int > w-2))
             )[:,:,None],
             0, 
             cubic_blend(
@@ -249,7 +338,6 @@ def warp(
                 image[bottom, right],
                 image[top, right],
                 v_ratio, u_ratio).astype(np.uint8))
-
 
     return np.fromfunction(create, shape=(return_height, return_width))
 
@@ -301,6 +389,7 @@ if __name__ == "__main__":
     br = np.array((0, 5))*fac
     tr = np.array((6, 10))*fac
     tl = np.array((6, 0))*fac
+
 
     vec01 = diff(*br, *bl)
     vec12 = diff(*tr, *br)

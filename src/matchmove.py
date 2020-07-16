@@ -91,7 +91,7 @@ class SelectTargetScreen(SelectMixin, Screen):
 class MatchMoveWidget(Widget):
     min_match_count = 10
     flann_index_kdtree = 0
-    video_width = 512
+    video_width = 1024
     fmt = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
 
     def save_to(self, to):
@@ -105,6 +105,7 @@ class MatchMoveWidget(Widget):
         async def task():
             self.destination = tex2cv_format(dest)
             h, w, *_ = dest.shape
+            print(self.points)
             self.reference = await popup_task(
                     "Calculating...", 
                     warp,
@@ -174,7 +175,7 @@ class MatchMoveWidget(Widget):
         ref_kp, ref_des = detect_keypoint(self.reference)
 
         i = 0
-        while cap.isOpened():
+        while cap.isOpened() and i < 5:
             ret, frame = cap.read()
             if not ret:
                 print("end process")
