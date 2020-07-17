@@ -6,7 +6,7 @@ import numpy as np
 from kivy.app import App
 from kivy.clock import mainthread
 from kivy.graphics.texture import Texture
-from kivy.properties import ObjectProperty, StringProperty, ListProperty, AliasProperty
+from kivy.properties import ObjectProperty, StringProperty, ListProperty, AliasProperty, NumericProperty
 from kivy.uix.widget import Widget
 from kivy.uix.popup import Popup
 from kivy.uix.progressbar import ProgressBar
@@ -87,12 +87,21 @@ class SelectTargetScreen(SelectMixin, Screen):
     def go_next(self):
         self.manager.current = self.next_state
 
-
 class MatchMoveWidget(Widget):
     min_match_count = 10
-    flann_index_kdtree = 0
-    video_width = 1024
+    flann_index_kdtree = NumericProperty(0)
+    video_width = NumericProperty(1024)
     fmt = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+
+    algorithms = {
+        "AKAZE" : cv2.AKAZE_create(),
+        "SIFT" : cv2.xfeatures2d.SIFT_create()
+    }
+
+    gamma = 1/1.8
+    gamma_cvt = np.uint8(255 * (np.linspace(0, 1, 256) ** gamma))
+    def correct(self, img):
+        return cv2.LUT(img, self.gamma_cvt)
 
     def save_to(self, to):
         return get_save_path("result", "matchmove", to)
@@ -103,9 +112,8 @@ class MatchMoveWidget(Widget):
 
     def set_destination(self, dest):
         async def task():
-            self.destination = tex2cv_format(dest)
+            self.destination = self.correct(tex2cv_format(dest))
             h, w, *_ = dest.shape
-            print(self.points)
             self.reference = await popup_task(
                     "Calculating...", 
                     warp,
@@ -119,6 +127,7 @@ class MatchMoveWidget(Widget):
                     np.array([h, w]),
                     np.array([0, w]),
                     h, w)
+            self.reference = self.correct(tex2cv_format(self.reference))
             cv2.imwrite(self.save_to("destination.png"), self.destination)
             cv2.imwrite(self.save_to("reference.png"), self.reference)
             await sleep(0.333)
@@ -151,15 +160,18 @@ class MatchMoveWidget(Widget):
         cv2.imwrite(self.save_to("target.png"), self.target)
         cv2.imwrite(self.save_to("destination.png"), self.destination)
 
-    def set_video_target(self, source):
+    def set_video_target(self, source, key):
         async def task():
             self.source = source
+            start = time.time()
             await popup_task(
                 "Calculating...",
-                self.execute_video)
+                self.execute_video,
+                key)
+            print(time.time() - start)
         forget(task())
 
-    def execute_video(self):
+    def execute_video(self, algorithm):
         cap = cv2.VideoCapture(self.source)
         if not cap:
             return
@@ -169,23 +181,25 @@ class MatchMoveWidget(Widget):
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         writer = cv2.VideoWriter(
-            self.save_to("result.mp4"), 
+            self.save_to(f"result_{algorithm}.mp4"), 
             self.fmt, fps, (self.video_width, self.video_width * h // w))
 
-        ref_kp, ref_des = detect_keypoint(self.reference)
+        ref_kp, ref_des = detect_keypoint(self.reference, self.algorithms[algorithm])
+        img=cv2.drawKeypoints(self.reference, ref_kp)
+        
 
         i = 0
-        while cap.isOpened() and i < 5:
+        while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                print("end process")
+                print("\nend process")
                 break
             
             frame = cv2.resize(frame, (self.video_width, self.video_width * h // w))
-            frame = cv2tex_format(frame)
+            frame = self.correct(frame)
 
             print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
-            tar_kp, tar_des = detect_keypoint(frame)
+            tar_kp, tar_des = detect_keypoint(frame, self.algorithms[algorithm])
             
             print(f"\rmatch frame: {i}\t\t\t\t", end="")
             src_pts, dst_pts = match_points(
