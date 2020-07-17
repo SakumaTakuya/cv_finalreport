@@ -64,8 +64,8 @@ def replace_image(
     """
         source * matして得られるreferenceのピクセルで置換
     """
-    ref_h, ref_w, color_channel = reference.shape
-    src_h, src_w, color_channel = source.shape
+    ref_h, ref_w, *_ = reference.shape
+    src_h, src_w, *_ = source.shape
 
     def create(i, j):
         pos = np.einsum('ij, jkl->ikl',

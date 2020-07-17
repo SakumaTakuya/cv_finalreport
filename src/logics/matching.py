@@ -11,7 +11,6 @@ def match_points(
     flann_index_kdtree=0):
     ref_des = np.float32(ref_des)
     tar_des = np.float32(tar_des)
-    print(ref_des.shape, tar_des.shape)
     index_params = dict(algorithm=flann_index_kdtree, trees=5)
     search_params = dict(checks=50)
     flann = cv2.FlannBasedMatcher(index_params, search_params)
@@ -20,16 +19,16 @@ def match_points(
     good = []
     for m, n in matches:
         if m.distance < 0.7*n.distance:
-            good.append(m)
+            good.append([m])
 
     if len(good) > min_match_count:
         # 対応している点を返す
-        src_pts = np.float32([ tar_kp[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-        dst_pts = np.float32([ ref_kp[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-        return src_pts, dst_pts
+        src_pts = np.float32([ tar_kp[m[0].queryIdx].pt for m in good ]).reshape(-1,1,2)
+        dst_pts = np.float32([ ref_kp[m[0].trainIdx].pt for m in good ]).reshape(-1,1,2)
+        return src_pts, dst_pts, good
     else:
         print(len(good))
-        return None, None
+        return None, None, good
 
 
 def detect_keypoint(reference, algorithm=sift):

@@ -88,7 +88,7 @@ class SelectTargetScreen(SelectMixin, Screen):
         self.manager.current = self.next_state
 
 class MatchMoveWidget(Widget):
-    min_match_count = 10
+    min_match_count = NumericProperty(10)
     flann_index_kdtree = NumericProperty(0)
     video_width = NumericProperty(1024)
     fmt = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -185,8 +185,9 @@ class MatchMoveWidget(Widget):
             self.fmt, fps, (self.video_width, self.video_width * h // w))
 
         ref_kp, ref_des = detect_keypoint(self.reference, self.algorithms[algorithm])
-        img=cv2.drawKeypoints(self.reference, ref_kp)
-        
+        cv2.imwrite(
+            self.save_to(f"keypoints_reference_{algorithm}.png"), 
+            cv2.drawKeypoints(self.reference, ref_kp, None, flags=4))
 
         i = 0
         while cap.isOpened():
@@ -200,13 +201,27 @@ class MatchMoveWidget(Widget):
 
             print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
             tar_kp, tar_des = detect_keypoint(frame, self.algorithms[algorithm])
-            
+
             print(f"\rmatch frame: {i}\t\t\t\t", end="")
-            src_pts, dst_pts = match_points(
+            src_pts, dst_pts, good = match_points(
                 ref_kp, ref_des, 
                 tar_kp, tar_des,
                 self.min_match_count,
                 self.flann_index_kdtree)
+
+            if i == 0:
+                print(f"\save frame: {i}\t\t\t\t", end="")
+                cv2.imwrite(
+                    self.save_to(f"keypoints_frame_{algorithm}.png"), 
+                    cv2.drawKeypoints(frame, tar_kp, None, flags=4))
+                cv2.imwrite(
+                    self.save_to(f"matches_{algorithm}.png"),
+                    cv2.drawMatchesKnn(
+                        self.reference, ref_kp, 
+                        frame, tar_kp, good,
+                        None,
+                        matchColor=(0, 255, 0), matchesMask=None,
+                        singlePointColor=(255, 0, 0), flags=0))
 
             if src_pts is not None or dst_pts is not None:
                 # frameからreferenceの変換を取得する
