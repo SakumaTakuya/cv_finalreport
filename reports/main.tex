@@ -1,28 +1,98 @@
-\section{問題文}
-近年、スポーツに使用されるスタジアムの
+\documentclass[11pt,a4paper]{jsarticle}
+%
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{bm}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multicol}
+\usepackage[psamsfonts]{amssymb}
+\usepackage{url}
+\usepackage{listings}
+
+\lstset{
+	%プログラム言語(複数の言語に対応，C,C++も可)
+ 	language = Python,
+ 	%背景色と透過度
+ 	backgroundcolor={\color[gray]{.90}},
+ 	%枠外に行った時の自動改行
+ 	breaklines = true,
+ 	%自動改行後のインデント量(デフォルトでは20[pt])	
+ 	breakindent = 10pt,
+ 	%標準の書体
+ 	basicstyle = \ttfamily\scriptsize,
+ 	%コメントの書体
+ 	commentstyle = {\itshape \color[cmyk]{1,0.4,1,0}},
+ 	%関数名等の色の設定
+ 	classoffset = 0,
+ 	%キーワード(int, ifなど)の書体
+ 	keywordstyle = {\bfseries \color[cmyk]{0,1,0,0}},
+ 	%表示する文字の書体
+ 	stringstyle = {\ttfamily \color[rgb]{0,0,1}},
+ 	%枠 "t"は上に線を記載, "T"は上に二重線を記載
+	%他オプション：leftline，topline，bottomline，lines，single，shadowbox
+ 	frame = TBrl,
+ 	%frameまでの間隔(行番号とプログラムの間)
+ 	framesep = 5pt,
+ 	%行番号の位置
+ 	numbers = left,
+	%行番号の間隔
+ 	stepnumber = 1,
+	%行番号の書体
+ 	numberstyle = \tiny,
+	%タブの大きさ
+ 	tabsize = 4,
+ 	%キャプションの場所("tb"ならば上下両方に記載)
+ 	captionpos = t
+}
+
+%
+%\setlength{\textwidth}{\fullwidth}
+%\setlength{\textheight}{40\baselineskip}
+% \addtolength{\textheight}{\topskip}
+% \setlength{\voffset}{-0.2in}
+% \setlength{\topmargin}{7mm}
+% \addtolength{\topmargin}{-0.75in}
+% \setlength{\oddsidemargin}{14mm}
+% \addtolength{\oddsidemargin}{-1in}
+% \setlength{\evensidemargin}{14mm}
+% \addtolength{\evensidemargin}{-1in}
+% \setlength{\textwidth}{170mm}
+% \setlength{\textheight}{256mm}
+% \setlength{\headsep}{0mm}
+% \setlength{\headheight}{0mm}
+% \setlength{\topskip}{0mm}
+
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+\title{2020年度 SoC設計技術\\D5章レポート}
+\author{慶應義塾大学 理工学研究科 専攻 修士1年 佐久間拓哉 (82019167)}
+\date{\today}
+\begin{document}
+\maketitle
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+\input{intro}
+\input{impl}
+\input{eval}
+\end{document}
 
 
-バーチャル広告と
+% アルゴリズム
+% 1. 走査対象の画像を切り取る
+% 2. 差し替え先の画像を選択
+% 3. 差し替え元の動画フレームと対象画像とを特徴点マッチング
+% 4. ホモグラフィを計算
+% 5. 
+
+% マッチング方法：
+%     テンプレートマッチング
+%     特徴量マッチング
+
+% 無駄部分のマッチングを省く
+%     高速化＋精度向上
 
 
-
-\section{実装詳細}
-アルゴリズム
-1. 走査対象の画像を切り取る
-2. 差し替え先の画像を選択
-3. 差し替え元の動画フレームと対象画像とを特徴点マッチング
-4. ホモグラフィを計算
-5. 
-
-
-
-\section{結果}
-アルゴリズムと精度
-    - データの違い
-        - 回転
-        - スケール
-        - 角度
-        - 動画
-        - ライティング
-    - 
 

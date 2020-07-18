@@ -138,6 +138,29 @@ def replace_image(
     return np.fromfunction(create, shape=(src_h, src_w))
 
 
+def warp_only(
+    reference,
+    source,
+    mat,
+    offset_h=0,
+    offset_w=0):
+    ref_h, ref_w, *_ = reference.shape
+    src_h, src_w, *_ = source.shape
+
+    def create(i, j):
+        pos = np.einsum('ij, jkl->ikl',
+            mat, np.array([j, i, np.ones(shape=j.shape)]))
+        pos = (pos[0:2] // pos[2]).astype(np.int16)
+        u = np.clip(pos[0]+offset_w, 0, ref_w-1)
+        v = np.clip(pos[1]+offset_h, 0, ref_h-1)
+        return np.where((
+            (pos[0] >= 0) & (pos[0] < ref_w) &\
+            (pos[1] >= 0) & (pos[1] < ref_h))[:,:,None],
+            reference[v, u],
+            0)
+
+    return np.fromfunction(create, shape=(src_h, src_w))
+
 def warp_image(
     image,
     from_bottom_left,
@@ -302,8 +325,6 @@ def warp(
         mask = np.where(
             (crs_bl < 0) & (crs_br < 0) & (crs_tr < 0) & (crs_tl < 0), 
             1, 0)
-        import cv2
-        cv2.imwrite("mask.png", mask*255)
         t_bottom, d_bottom = td_bottom(pos)
         t_top, d_top = td_top(pos)
         t_left, d_left = td_left(pos)

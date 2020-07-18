@@ -6,7 +6,7 @@ import numpy as np
 from kivy.app import App
 from kivy.clock import mainthread
 from kivy.graphics.texture import Texture
-from kivy.properties import ObjectProperty, StringProperty, ListProperty, AliasProperty, NumericProperty
+from kivy.properties import ObjectProperty, StringProperty, ListProperty, AliasProperty, NumericProperty, BooleanProperty
 from kivy.uix.widget import Widget
 from kivy.uix.popup import Popup
 from kivy.uix.progressbar import ProgressBar
@@ -18,7 +18,7 @@ import threading
 # from logics.clip import clip_image
 from logics.operation import cross, diff
 from logics.matching import match_image, get_homography, match_points, detect_keypoint
-from logics.warp import warp_image_liner, replace_image, warp
+from logics.warp import warp_image_liner, replace_image, warp, warp_only
 from utils.file import get_save_path
 from utils.format import cv2tex_format, tex2cv_format
 from utils.kivyevent import sleep, popup_task, forget
@@ -40,11 +40,19 @@ class SelectReferenceScreen(ImageSelectMixin, Screen):
     def go_next(self):
         self.manager.current = self.next_state
 
+    def set_points_auto(self):
+        h, w, *_ = self.cv_img.shape
+        self.points = [
+            [0, 0], [h, 0], [h, w], [0, w]
+        ]
+
     def show_load(self, load=None, filters=["*.jpg", "*.png"]):
         super().show_load(load, filters)
         if not hasattr(self, "next_button"):
             self.next_button = self.ids.next_button
+            self.pass_button = self.ids.pass_button
         self.next_button.disabled = True
+        self.pass_button.disabled = False
 
     def activate_next(self):
         self.next_button.disabled = False
@@ -91,6 +99,8 @@ class MatchMoveWidget(Widget):
     min_match_count = NumericProperty(10)
     flann_index_kdtree = NumericProperty(0)
     video_width = NumericProperty(1024)
+    is_optical = BooleanProperty(False)
+
     fmt = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
 
     algorithms = {
@@ -112,8 +122,10 @@ class MatchMoveWidget(Widget):
 
     def set_destination(self, dest):
         async def task():
-            self.destination = self.correct(tex2cv_format(dest))
-            h, w, *_ = dest.shape
+            h = np.sqrt(np.sum((self.points[1] - self.points[0])**2)).astype(np.int16)
+            w = np.sqrt(np.sum((self.points[2] - self.points[1])**2)).astype(np.int16)
+            self.destination = cv2.resize(self.correct(tex2cv_format(dest)), (w, h))
+            # h, w, *_ = dest.shape
             self.reference = await popup_task(
                     "Calculating...", 
                     warp,
@@ -127,51 +139,23 @@ class MatchMoveWidget(Widget):
                     np.array([h, w]),
                     np.array([0, w]),
                     h, w)
-            self.reference = self.correct(tex2cv_format(self.reference))
+            self.reference = tex2cv_format(self.reference)
             cv2.imwrite(self.save_to("destination.png"), self.destination)
             cv2.imwrite(self.save_to("reference.png"), self.reference)
+            self.reference = self.correct(self.reference)
             await sleep(0.333)
         forget(task())
-
-    def set_target(self, target):
-        async def task():
-            self.target = target
-            cv2.imwrite(self.save_to("target.png"), self.target)
-            await popup_task(
-                "Calculating...",
-                self.execute_image)
-        forget(task())
-
-    def execute_image(self):
-        src_pts, dst_pts = match_image(
-            self.reference, 
-            self.target, 
-            self.min_match_count, self.flann_index_kdtree)
-
-        if src_pts is None or dst_pts is None:
-            return
-
-        # frameからreferenceの変換を取得する
-        H = get_homography(src_pts, dst_pts)
-
-        ret = replace_image(self.destination, self.target, H)
-        cv2.imwrite(self.save_to("result.png"), ret)
-        cv2.imwrite(self.save_to("reference.png"), self.reference)
-        cv2.imwrite(self.save_to("target.png"), self.target)
-        cv2.imwrite(self.save_to("destination.png"), self.destination)
 
     def set_video_target(self, source, key):
         async def task():
             self.source = source
-            start = time.time()
             await popup_task(
                 "Calculating...",
                 self.execute_video,
                 key)
-            print(time.time() - start)
         forget(task())
 
-    def execute_video(self, algorithm):
+    def execute_video(self, algorithm, max_speed=1):
         cap = cv2.VideoCapture(self.source)
         if not cap:
             return
@@ -180,9 +164,12 @@ class MatchMoveWidget(Widget):
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
 
+        size_w = self.video_width 
+        size_h = self.video_width * h // w
+
         writer = cv2.VideoWriter(
             self.save_to(f"result_{algorithm}.mp4"), 
-            self.fmt, fps, (self.video_width, self.video_width * h // w))
+            self.fmt, fps, (size_w, size_h))
 
         ref_kp, ref_des = detect_keypoint(self.reference, self.algorithms[algorithm])
         cv2.imwrite(
@@ -190,19 +177,26 @@ class MatchMoveWidget(Widget):
             cv2.drawKeypoints(self.reference, ref_kp, None, flags=4))
 
         i = 0
+        minh = 0
+        minw = 0
+        maxh = size_h
+        maxw = size_w
+        start = time.time()
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
+                t = time.time()
+                print((t - start) / max(i, 1))
                 print("\nend process")
                 break
             
-            frame = cv2.resize(frame, (self.video_width, self.video_width * h // w))
+            frame = cv2.resize(frame, (size_w, size_h))
             frame = self.correct(frame)
 
-            print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
-            tar_kp, tar_des = detect_keypoint(frame, self.algorithms[algorithm])
+            # print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
+            tar_kp, tar_des = detect_keypoint(frame[minh:maxh, minw:maxw], self.algorithms[algorithm])
 
-            print(f"\rmatch frame: {i}\t\t\t\t", end="")
+            # print(f"\rmatch frame: {i}\t\t\t\t", end="")
             src_pts, dst_pts, good = match_points(
                 ref_kp, ref_des, 
                 tar_kp, tar_des,
@@ -210,25 +204,37 @@ class MatchMoveWidget(Widget):
                 self.flann_index_kdtree)
 
             if i == 0:
-                print(f"\save frame: {i}\t\t\t\t", end="")
+                # print(f"\save frame: {i}\t\t\t\t", end="")
                 cv2.imwrite(
                     self.save_to(f"keypoints_frame_{algorithm}.png"), 
                     cv2.drawKeypoints(frame, tar_kp, None, flags=4))
                 cv2.imwrite(
                     self.save_to(f"matches_{algorithm}.png"),
                     cv2.drawMatchesKnn(
+                        frame, tar_kp, 
                         self.reference, ref_kp, 
-                        frame, tar_kp, good,
-                        None,
+                        good, None,
                         matchColor=(0, 255, 0), matchesMask=None,
                         singlePointColor=(255, 0, 0), flags=0))
+                start = time.time()
 
             if src_pts is not None or dst_pts is not None:
                 # frameからreferenceの変換を取得する
                 H = get_homography(src_pts, dst_pts)
+                if self.is_optical:
+                    replaced = warp_only(self.destination, frame, H, minh, minw)
+                    mask = np.sum(replaced > 0, axis=2, dtype=bool)
 
-                print(f"\rreplace frame: {i}\t\t\t\t", end="")
-                frame = replace_image(self.destination, frame, H).astype(np.uint8)
+                    # print(f"\rreplace frame: {i}\t\t\t\t", end="")
+                    frame = np.where(mask[:,:,None], replaced, frame).astype(np.uint8)
+                
+                    mask_id = np.array(np.where(mask))
+                    minh = min(np.min(mask_id[0])-max_speed, 0)
+                    minw = min(np.min(mask_id[1])-max_speed, 0)
+                    maxh = min(np.max(mask_id[0])+max_speed, size_h)
+                    maxw = min(np.max(mask_id[1])+max_speed, size_w)
+                else:
+                    frame = replace_image(self.destination, frame, H).astype(np.uint8)
 
             writer.write(frame)
             i += 1

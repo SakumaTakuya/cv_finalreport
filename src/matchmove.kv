@@ -23,6 +23,12 @@
                 on_press: root.show_load()
                 on_press: image.clear()
             Button:
+                id: pass_button
+                text: "pass >"
+                disabled: True
+                on_press: root.set_points_auto()
+                on_press: root.go_next()
+            Button:
                 id: next_button
                 text: "next >"
                 disabled: True
@@ -78,6 +84,7 @@
 
 <MatchMoveWidget>:
     video_width: 1024
+    is_optical: True
     BoxLayout:
         orientation: "vertical"
         size: root.size
