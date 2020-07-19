@@ -267,17 +267,21 @@ def warp(
     return_height,
     return_width):
 
-    # 任意の点から各辺への距離(d)とその垂線の足が辺のどのあたりに位置しているかの割合(t)
+    # 任意の点から各辺への距離(d)とその垂線の足が辺のどのあたりに位置しているかの割合(t)を返す関数を作成
     def td(f, t):
         a = np.array([f, t])
+        # fとtの差分=fを基準としたtへのベクトル
         dif = np.diff(a, axis=0)[0]
         det = np.linalg.det(a)
         sq = dif @ dif
         f = f[:,None,None]
         def ret(x):
+            # 直線を表す式：dif[1] * x[0] - dif[0] * x[1] - det=0
             up = (dif[1] * x[0] - dif[0] * x[1] - det)
             r = -up / sq
+            # fを基準とした垂線の足へのベクトル
             h_dif = f - np.array([r * dif[1] + x[0], -r * dif[0] + x[1]])
+            # ベクトルの大きさの比と点と直線の距離を返戻
             return np.sqrt(np.sum(h_dif**2, axis=0) / sq), (np.abs(up) / np.sqrt(sq))
         return ret
     td_bottom = td(to_bottom_left, to_bottom_right)
@@ -293,18 +297,12 @@ def warp(
 
     h, w, *_ = image.shape
 
+    # 関数の本体：i,jはnp.meshgridで与えられる
     def create(i, j):
         nonlocal to_bottom_left, to_bottom_right, to_top_left, to_top_right
         pos = np.array([i, j])
 
-        # to_bottom_left = to_bottom_left
-        # to_bottom_right = to_bottom_right[:,None, None]
-        # to_top_left = to_top_left[:,None, None]
-        # to_top_right = to_top_right[:,None, None]
-
-        # print((to_bottom_right - to_bottom_left).shape)
-        # print((pos - to_bottom_left[:,None, None]).shape)
-
+        # ピクセルが変換先の領域内に含まれているか判定するために外積を求める
         crs_bl = np.cross(
             pos - to_bottom_left[:,None, None],
             to_bottom_right - to_bottom_left,
@@ -322,6 +320,7 @@ def warp(
             to_bottom_left - to_top_left, 
             axis=0)
 
+        # posから各頂点への外積が負なら内部
         mask = np.where(
             (crs_bl < 0) & (crs_br < 0) & (crs_tr < 0) & (crs_tl < 0), 
             1, 0)
@@ -341,6 +340,7 @@ def warp(
             + ((1 - t_left) * move_bottom_left[1] + t_left * move_top_left[1]) * (1 - t_hori)\
             + ((1 - t_right) * move_bottom_right[1] + t_right * move_top_right[1]) * t_hori)
         
+        # バイリニア補完するために隣接ピクセルの影響度を計算
         v_int = v.astype(np.int16)
         u_int = u.astype(np.int16)
         bottom = np.where((v_int < 0) | (v_int > h-2), h-2, v_int)
@@ -351,16 +351,20 @@ def warp(
         u_ratio = (u - u_int)[:,:,None]
 
         return np.where((
+                # 内部判定
                 (mask == 0) |\
+                # 辺の外側に出ていないか判定
                 (((t_bottom < 0) | (t_bottom > 1)) &\
                 ((t_top < 0) | (t_top > 1)) &\
                 ((t_left < 0) | (t_left > 1)) &\
                 ((t_right < 0) | (t_right > 1)) &\
                 ((t_vert < 0) | (t_vert > 1)) &\
                 ((t_hori < 0) | (t_hori > 1))) |\
+                # 存在するピクセルを参照しているか判定
                 ((v_int < 0) | (v_int > h-2) | (u_int < 0) | (u_int > w-2))
             )[:,:,None],
             0, 
+            # バイリニア補完で色を決定
             cubic_blend(
                 0, 
                 image[bottom, left],
