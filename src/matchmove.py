@@ -19,12 +19,15 @@ import threading
 from logics.operation import cross, diff
 from logics.matching import match_image, get_homography, match_points, detect_keypoint
 from logics.warp import warp_image_liner, replace_image, warp, warp_only
-from utils.file import get_save_path
+from utils.file import get_save_path, get_file_ext
 from utils.format import cv2tex_format, tex2cv_format
 from utils.kivyevent import sleep, popup_task, forget
 from utils.mixin import SelectMixin, ImageSelectMixin
 from widgets.loaddialog import LoadDialog
 from widgets.image import RectDrawImage
+
+IMAGE_EXT = ["*.jpg", "*.png"]
+VIDEO_EXT = ["*.mkv", "*.ogv", "*.avi", "*.mov", "*.flv"]
 
 
 class SelectReferenceScreen(ImageSelectMixin, Screen):
@@ -46,7 +49,7 @@ class SelectReferenceScreen(ImageSelectMixin, Screen):
             [0, 0], [h, 0], [h, w], [0, w]
         ]
 
-    def show_load(self, load=None, filters=["*.jpg", "*.png"]):
+    def show_load(self, load=None, filters=IMAGE_EXT):
         super().show_load(load, filters)
         if not hasattr(self, "next_button"):
             self.next_button = self.ids.next_button
@@ -66,7 +69,7 @@ class SelectDestinationScreen(ImageSelectMixin, Screen):
         super().__init__(**kwargs)
         self.texture = Texture.create(size=(1, 1))
 
-    def show_load(self, load=None, filters=["*.jpg", "*.png"]):
+    def show_load(self, load=None, filters=IMAGE_EXT):
         super().show_load(load, filters)
         if not hasattr(self, "next_button"):
             self.next_button = self.ids.next_button
@@ -77,15 +80,27 @@ class SelectDestinationScreen(ImageSelectMixin, Screen):
 
 
 class SelectTargetScreen(SelectMixin, Screen):
+    source = StringProperty("")
     video_source = StringProperty("")
+    image_source = StringProperty("")
 
-    def set_video_source(self, filename):
-        self.video_source = filename[0]
+    def set_source(self, filename):
+        self.source = filename[0]
         self.dismiss_popup()
+        ext = "*" + get_file_ext(self.source).lower()
 
-    def show_load(self, load=None, filters=["*.mkv", "*.ogv", "*.avi", "*.mov", "*.flv"]):
+        print(ext)
+        if ext in VIDEO_EXT:
+            self.video_source = f"{filename[0]}"
+            print("select video")
+        elif ext in IMAGE_EXT:
+            self.image_source = f"{filename[0]}"
+            print("select image")
+
+
+    def show_load(self, load=None, filters=VIDEO_EXT+IMAGE_EXT):
         if load is None:
-            load = self.set_video_source
+            load = self.set_source
         super().show_load(load, filters)
 
         if not hasattr(self, "next_button"):
@@ -114,7 +129,7 @@ class MatchMoveWidget(Widget):
         return cv2.LUT(img, self.gamma_cvt)
 
     def save_to(self, to):
-        return get_save_path("result", "matchmove", to)
+        return get_save_path("result", "matchmove", "eval", to)
 
     def set_reference(self, reference, points):
         self.reference = reference
@@ -122,10 +137,10 @@ class MatchMoveWidget(Widget):
 
     def set_destination(self, dest):
         async def task():
-            h = np.sqrt(np.sum((self.points[1] - self.points[0])**2)).astype(np.int16)
-            w = np.sqrt(np.sum((self.points[2] - self.points[1])**2)).astype(np.int16)
+            # h = np.sqrt(np.sum((self.points[1] - self.points[0])**2)).astype(np.int16)
+            # w = np.sqrt(np.sum((self.points[2] - self.points[1])**2)).astype(np.int16)
+            h, w, *_ = dest.shape
             self.destination = cv2.resize(self.correct(tex2cv_format(dest)), (w, h))
-            # h, w, *_ = dest.shape
             self.reference = await popup_task(
                     "Calculating...", 
                     warp,
@@ -146,14 +161,85 @@ class MatchMoveWidget(Widget):
             await sleep(0.333)
         forget(task())
 
-    def set_video_target(self, source, key):
+    def set_target(self, source, key):
+        self.source = source
+        ext = "*" + get_file_ext(self.source)
+        if ext in VIDEO_EXT:
+            self.set_video_target(key)
+        else:
+            self.set_image_target(key)
+
+    def set_image_target(self, key):
         async def task():
-            self.source = source
+            try:
+                folder, file = os.path.split(self.source)
+                import re
+                *_, typ, _ = re.split(r"[\._]", file)
+                corners = np.load(os.path.join(folder, f"points_{typ}.npy"))
+            except Exception as e:
+                corners = None
+                print("no corners file:", e)
+
+            await popup_task(
+                "Calculating...",
+                self.execute_image,
+                key)
+        forget(task())
+
+    def set_video_target(self, key):
+        async def task():
             await popup_task(
                 "Calculating...",
                 self.execute_video,
                 key)
         forget(task())
+
+    def execute_image(self, algorithm, corners=None, typ=""):
+        frame = cv2.imread(self.source)
+        size_h, size_w, *_ = frame.shape
+
+        frame = cv2.resize(frame, (size_w, size_h))
+        frame = self.correct(frame)
+
+        ref_kp, ref_des = detect_keypoint(self.reference, self.algorithms[algorithm])
+        tar_kp, tar_des = detect_keypoint(frame, self.algorithms[algorithm])
+        
+        src_pts, dst_pts, good = match_points(
+            ref_kp, ref_des, 
+            tar_kp, tar_des,
+            self.min_match_count,
+            self.flann_index_kdtree)
+
+        cv2.imwrite(
+            self.save_to(f"keypoints_frame_image_{algorithm}_{typ}.png"), 
+            cv2.drawKeypoints(frame, tar_kp, None, flags=4))
+        cv2.imwrite(
+            self.save_to(f"matches_image_{algorithm}_{len(good)}_{typ}.png"),
+            cv2.drawMatchesKnn(
+                frame, tar_kp, 
+                self.reference, ref_kp, 
+                good, None,
+                matchColor=(0, 255, 0), matchesMask=None,
+                singlePointColor=(255, 0, 0), flags=0))
+        
+        if src_pts is not None or dst_pts is not None:
+            # frameからreferenceの変換を取得する
+            H = get_homography(src_pts, dst_pts)
+            frame = replace_image(self.destination, frame, H).astype(np.uint8)
+            cv2.imwrite(
+                self.save_to(f"result_{algorithm}_{typ}.png"), 
+                frame)
+
+            # h, w, *_ = self.reference.shape
+            # inv_H =  get_homography(dst_pts, src_pts)
+            # bl = (inv_H @ np.array([0, 0, 1]))[::-1][1:]
+            # tl = (inv_H @ np.array([w, 0, 1]))[::-1][1:]
+            # tr = (inv_H @ np.array([w, h, 1]))[::-1][1:]
+            # br = (inv_H @ np.array([0, h, 1]))[::-1][1:]
+            # print(np.array([bl, tl, tr, br]))
+            # print(np.array([size_h - corners[:, 0] , corners[:, 1]]).T)
+
+            print("save")
 
     def execute_video(self, algorithm, max_speed=1):
         cap = cv2.VideoCapture(self.source)
@@ -196,6 +282,8 @@ class MatchMoveWidget(Widget):
             # print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
             tar_kp, tar_des = detect_keypoint(frame[minh:maxh, minw:maxw], self.algorithms[algorithm])
 
+            h_c, w_c, *_ = frame[minh:maxh, minw:maxw].shape
+            print( h_c*w_c / size_h/size_w)
             # print(f"\rmatch frame: {i}\t\t\t\t", end="")
             src_pts, dst_pts, good = match_points(
                 ref_kp, ref_des, 
@@ -205,6 +293,7 @@ class MatchMoveWidget(Widget):
 
             if i == 0:
                 # print(f"\save frame: {i}\t\t\t\t", end="")
+                print(len(good))
                 cv2.imwrite(
                     self.save_to(f"keypoints_frame_{algorithm}.png"), 
                     cv2.drawKeypoints(frame, tar_kp, None, flags=4))

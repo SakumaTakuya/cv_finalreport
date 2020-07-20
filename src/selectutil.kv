@@ -1,0 +1,26 @@
+#:kivy 1.11.1
+
+<SelectWidget>:
+    BoxLayout:
+        orientation: "vertical"
+        size: root.size
+        RectDrawImage:
+            id: image
+            size_hint_y: 0.9
+            texture: root.texture
+            can_draw: root.is_loaded
+            on_add_point: root.add_pixels(*args)
+            allow_stretch: True
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: 0.1
+            Button:
+                id: select_button
+                text: "select image"
+                on_press: root.show_load()
+                on_press: image.clear()
+                on_press: root.clear_pixels()
+            Button:
+                id: save_button
+                text: "save"
+                on_press: root.save()

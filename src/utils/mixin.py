@@ -30,7 +30,8 @@ class SelectMixin:
 class ImageSelectMixin(SelectMixin):
     texture = ObjectProperty(None)
     is_loaded = BooleanProperty(False)
-    image_size = NumericProperty(512)
+    image_size = NumericProperty(1024)
+    image_source = StringProperty(None)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -38,6 +39,7 @@ class ImageSelectMixin(SelectMixin):
         self.texture = Texture.create(size=(1, 1))
 
     def load_texture(self, filename):
+        self.image_source = filename[0]
         img = cv2tex_format(cv2.imread(filename[0]))
         h, w, *_ = img.shape
         img = cv2.resize(

@@ -52,15 +52,12 @@ def warp_image_liner(
 
     return ret
 
-# define the criteria to stop and refine the corners
-criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
 def replace_image(
     reference,
     source,
     mat,
-    radius=3,
-    hrad=8,
-    can_correct=False):
+    radius=1,
+    corners=None):
     """
         source * matして得られるreferenceのピクセルで置換
     """
@@ -72,7 +69,7 @@ def replace_image(
             mat, np.array([j, i, np.ones(shape=j.shape)]))
         pos = (pos[0:2] // pos[2]).astype(np.int16)
 
-        if can_correct:
+        if corners is not None:
             pos_min_w = (0 <= pos[0]) & (pos[0] <= radius)
             pos_min_h = (0 <= pos[1]) & (pos[1] <= radius)
             pos_max_w = (ref_w-1-radius <= pos[0]) & (pos[0] <= ref_w-1)
@@ -88,45 +85,18 @@ def replace_image(
                 minh_maxw_id[0].size > 0 and minh_maxw_id[1].size > 0 and\
                 maxh_maxw_id[0].size > 0 and maxh_maxw_id[1].size > 0 and\
                 maxh_minw_id[0].size > 0 and maxh_minw_id[1].size > 0:
-
-                minh_minw_h, minh_minw_w = minh_minw_id[0][0], minh_minw_id[1][0]
-                minh_maxw_h, minh_maxw_w = minh_maxw_id[0][0], minh_maxw_id[1][0]
-                maxh_maxw_h, maxh_maxw_w = maxh_maxw_id[0][0], maxh_maxw_id[1][0]
-                maxh_minw_h, maxh_minw_w = maxh_minw_id[0][0], maxh_minw_id[1][0]
-
-                gray = cv2.cvtColor(source, cv2.COLOR_BGR2GRAY)
-                def get_id(h, w):
-                    dst = cv2.cornerHarris(gray[h-hrad:h+hrad,w-hrad:w+hrad], 2, 3, .04)
-                    dst = cv2.dilate(dst,None)
-                    _, dst = cv2.threshold(dst,0.01*dst.max(),255,0)
-                    # find centroids
-                    _, _, _, centroids = cv2.connectedComponentsWithStats(np.uint8(dst))
-                    corners = cv2.cornerSubPix(gray,np.float32(centroids),(5,5),(-1,-1),criteria)
-                    return  corners[0] + np.array([h-hrad,w-hrad]) \
-                            if corners.size > 0 else \
-                            np.array([h, w])
-
-                minh_minw_id = get_id(minh_minw_h, minh_minw_w)
-                minh_maxw_id = get_id(minh_maxw_h, minh_maxw_w)
-                maxh_maxw_id = get_id(maxh_maxw_h, maxh_maxw_w)
-                maxh_minw_id = get_id(maxh_minw_h, maxh_minw_w)
-
-                mask = warp(
-                    reference,
-                    np.array([0, 0]),
-                    np.array([ref_h-1, 0]),
-                    np.array([ref_h-1, ref_w-1]),
-                    np.array([0, ref_w-1]),
-                    minh_minw_id,
-                    maxh_minw_id,
-                    maxh_maxw_id,
-                    minh_maxw_id,
-                    src_h, src_w)
-                return np.where(
-                    np.all(mask > 0, axis=2)[:,:,None], 
-                    mask,
-                    source)
-
+                
+                print(
+                    np.min(np.sqrt(np.sum((np.array(minh_minw_id).T  - corners)**2, axis=1))) +\
+                    np.min(np.sqrt(np.sum((np.array(minh_maxw_id).T  - corners)**2, axis=1))) +\
+                    np.min(np.sqrt(np.sum((np.array(minh_maxw_id).T  - corners)**2, axis=1))) +\
+                    np.min(np.sqrt(np.sum((np.array(maxh_minw_id).T  - corners)**2, axis=1)))
+                )
+                print(minh_minw_id)
+                print(minh_maxw_id)
+                print(minh_maxw_id)
+                print(maxh_minw_id)
+                print(corners)
         u = np.clip(pos[0], 0, ref_w-1)
         v = np.clip(pos[1], 0, ref_h-1)
         return np.where((

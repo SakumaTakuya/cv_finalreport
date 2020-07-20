@@ -63,9 +63,18 @@
 <SelectTargetScreen>:
     BoxLayout:
         orientation: "vertical"
-        VideoPlayer:
-            id: video
-            source: root.video_source
+        BoxLayout:
+            size_hint_y: 0.9
+            orientation: "vertical"
+            VideoPlayer:
+                id: video
+                source: root.video_source
+                size_hint_y: 1
+            Image:
+                id: image
+                source: root.image_source
+                size_hint_y: 1
+                allow_stretch: True
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: 0.1
@@ -109,17 +118,16 @@
                 id: select_target
                 name: "select_target"
                 next_state: "select_command"
-                # on_leave: root.set_video_target(self.video_source)
             Screen:
                 name: "select_command"
                 BoxLayout:
                     orientation: "vertical"
                     Button:
                         text: "do with akaze"
-                        on_press: root.set_video_target(select_target.video_source, "AKAZE")
+                        on_press: root.set_target(select_target.source, "AKAZE")
                     Button:
                         text: "do with sift"
-                        on_press: root.set_video_target(select_target.video_source, "SIFT")
+                        on_press: root.set_target(select_target.source, "SIFT")
                     Button:
                         text: "back to select reference"
                         on_press: manager.current = "select_reference"
