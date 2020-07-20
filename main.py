@@ -1,16 +1,18 @@
 import argparse
-import cv2
-import numpy as np
-import tkinter
-import tkinter.ttk
+from src.matchmove import MatchMoveApp
+from src.selectutil import SelectUtilApp
 
+apps = {
+    "main" : MatchMoveApp,
+    "util" : SelectUtilApp
+}
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--app', required=True)
+parser.add_argument('usage', choices=apps.keys())
+
 
 def main(args=parser.parse_args()):
-    pass
-
+    apps[args.usage]().run()
 
 
 if __name__ == "__main__":

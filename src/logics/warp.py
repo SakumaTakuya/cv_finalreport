@@ -97,6 +97,7 @@ def replace_image(
                 print(minh_maxw_id)
                 print(maxh_minw_id)
                 print(corners)
+
         u = np.clip(pos[0], 0, ref_w-1)
         v = np.clip(pos[1], 0, ref_h-1)
         return np.where((
@@ -224,6 +225,58 @@ def warp_image(
     return ret
 
 
+def warp2(    
+    image,
+    from_bottom_left,
+    from_bottom_right,
+    from_top_right,
+    from_top_left,
+    to_bottom_left,
+    to_bottom_right,
+    to_top_right,
+    to_top_left,
+    return_height,
+    return_width):
+    src_points = np.array([
+        to_bottom_left,
+        to_bottom_right,
+        to_top_right,
+        to_top_left])
+
+    dst_points = np.array([
+        from_bottom_left, 
+        from_bottom_right,
+        from_top_right,
+        from_top_left])
+
+    src_x = src_points[:,1]
+    src_y = src_points[:,0]
+    dst_x = dst_points[:,1]
+    dst_y = dst_points[:,0]
+
+    shp = src_x.shape
+    zero = lambda : np.zeros(shp)
+    one = lambda : np.ones(shp)
+
+    fst = np.array([zero(), zero(), zero(), src_x, src_y, one(), -dst_y * src_x, -dst_y * src_y])
+    scd = np.array([src_x, src_y, one(), zero(), zero(), zero(), -dst_x * src_x, -dst_x * src_y])
+
+    A = np.insert(fst, range(fst.shape[1]), scd, axis=1).T
+
+    h = np.linalg.pinv(A) @ np.insert(dst_y,  range(dst_y.shape[0]), dst_x, axis=0)
+    h = h.squeeze()
+    h = np.array([
+        [h[0], h[1], h[2]],
+        [h[3], h[4], h[5]],
+        [h[6], h[7], 1]
+    ])
+
+    return warp_only(
+        image,
+        np.zeros(shape=(return_height, return_width)),
+        h)
+
+
 def warp(
     image,
     from_bottom_left,
@@ -346,49 +399,10 @@ def warp(
     return np.fromfunction(create, shape=(return_height, return_width))
 
 if __name__ == "__main__":
-    # siz = 160
-    # from operation import cross, diff
-    # img1 = np.ones(shape=(siz, siz, 1), dtype=np.uint8) * 255
-    # bl = (10, 20)
-    # br = (60, 0)
-    # tr = (60, 100)
-    # tl = (0, 50)
-
-    # img1[bl] = 0
-    # img1[br] = 0
-    # img1[tr] = 0
-    # img1[tl] = 0
-
-    # vec01 = diff(*br, *bl)
-    # vec12 = diff(*tr, *br)
-    # vec23 = diff(*tl, *tr)
-    # vec30 = diff(*bl, *tl)
-    # clip = np.zeros(shape=(siz, siz, 1), dtype=np.uint8)
-    # for i in range(siz):
-    #     for j in range(siz):
-    #         if cross(*vec01, *diff(i, j, *bl)) > 0 and \
-    #             cross(*vec12, *diff(i, j, *br)) > 0 and \
-    #             cross(*vec23, *diff(i, j, *tr)) > 0 and \
-    #             cross(*vec30, *diff(i, j, *tl)) > 0:
-    #             clip[i, j] = img1[i, j] // np.random.randint(1, 8, dtype=np.uint8)
-
-    # ret = warp_image_liner(
-    #     clip,
-    #     *bl,
-    #     *br,
-    #     *tr,
-    #     *tl,
-    #     160, 160)
-
-    # import cv2
-    # cv2.imwrite("start.png", img1)
-    # cv2.imwrite("from.png", clip)
-    # cv2.imwrite("to.png", ret)
-
     fac = 10
     from operation import cross, diff
     import cv2
-    img1 = np.ones(shape=(15*fac, 16*fac, 3), dtype=np.uint8) * 255
+    img1 = np.ones(shape=(128, 128, 3), dtype=np.uint8) * 255
     bl = np.array((1, 2))*fac
     br = np.array((0, 5))*fac
     tr = np.array((6, 10))*fac
@@ -413,7 +427,7 @@ if __name__ == "__main__":
     to_br = br+(np.array([1,1])+5)*fac
     to_tr = tr+(np.array([1,4])+5)*fac
     to_tl = tl+(np.array([1,2])+5)*fac
-    ret = warp(
+    ret = warp2(
         clip,
         bl,
         br,
@@ -424,6 +438,41 @@ if __name__ == "__main__":
         to_tr,
         to_tl,
         26*fac, 26*fac)
+    
+    import time
+    sum = 0
+    for i in range(10000):
+        prev = time.time()
+        warp2(
+            clip,
+            bl,
+            br,
+            tr,
+            tl,
+            to_bl,
+            to_br,
+            to_tr,
+            to_tl,
+            256, 256)
+        sum += time.time() - prev
+    print(sum / 10000)
+
+    sum = 0
+    for i in range(10000):
+        prev = time.time()
+        warp(
+            clip,
+            bl,
+            br,
+            tr,
+            tl,
+            to_bl,
+            to_br,
+            to_tr,
+            to_tl,
+            256, 256)
+        sum += time.time() - prev
+    print(sum / 10000)
 
     ret[to_bl[0], to_bl[1]] = [0,0,255]
     ret[to_br[0], to_br[1]] = [0,255,0]

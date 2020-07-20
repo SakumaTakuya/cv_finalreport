@@ -16,15 +16,15 @@ import time
 import threading
 
 # from logics.clip import clip_image
-from logics.operation import cross, diff
-from logics.matching import match_image, get_homography, match_points, detect_keypoint
-from logics.warp import warp_image_liner, replace_image, warp, warp_only
-from utils.file import get_save_path, get_file_ext
-from utils.format import cv2tex_format, tex2cv_format
-from utils.kivyevent import sleep, popup_task, forget
-from utils.mixin import SelectMixin, ImageSelectMixin
-from widgets.loaddialog import LoadDialog
-from widgets.image import RectDrawImage
+from .logics.operation import cross, diff
+from .logics.matching import match_image, get_homography, match_points, detect_keypoint
+from .logics.warp import warp_image_liner, replace_image, warp, warp_only
+from .utils.file import get_save_path, get_file_ext
+from .utils.format import cv2tex_format, tex2cv_format
+from .utils.kivyevent import sleep, popup_task, forget
+from .utils.mixin import SelectMixin, ImageSelectMixin
+from .widgets.loaddialog import LoadDialog
+from .widgets.image import RectDrawImage
 
 IMAGE_EXT = ["*.jpg", "*.png"]
 VIDEO_EXT = ["*.mkv", "*.ogv", "*.avi", "*.mov", "*.flv"]
@@ -89,13 +89,10 @@ class SelectTargetScreen(SelectMixin, Screen):
         self.dismiss_popup()
         ext = "*" + get_file_ext(self.source).lower()
 
-        print(ext)
         if ext in VIDEO_EXT:
             self.video_source = f"{filename[0]}"
-            print("select video")
         elif ext in IMAGE_EXT:
             self.image_source = f"{filename[0]}"
-            print("select image")
 
 
     def show_load(self, load=None, filters=VIDEO_EXT+IMAGE_EXT):
@@ -230,17 +227,6 @@ class MatchMoveWidget(Widget):
                 self.save_to(f"result_{algorithm}_{typ}.png"), 
                 frame)
 
-            # h, w, *_ = self.reference.shape
-            # inv_H =  get_homography(dst_pts, src_pts)
-            # bl = (inv_H @ np.array([0, 0, 1]))[::-1][1:]
-            # tl = (inv_H @ np.array([w, 0, 1]))[::-1][1:]
-            # tr = (inv_H @ np.array([w, h, 1]))[::-1][1:]
-            # br = (inv_H @ np.array([0, h, 1]))[::-1][1:]
-            # print(np.array([bl, tl, tr, br]))
-            # print(np.array([size_h - corners[:, 0] , corners[:, 1]]).T)
-
-            print("save")
-
     def execute_video(self, algorithm, max_speed=1):
         cap = cv2.VideoCapture(self.source)
         if not cap:
@@ -272,19 +258,17 @@ class MatchMoveWidget(Widget):
             ret, frame = cap.read()
             if not ret:
                 t = time.time()
-                print((t - start) / max(i, 1))
-                print("\nend process")
+                print("\nend process:", (t - start) / max(i, 1))
                 break
             
             frame = cv2.resize(frame, (size_w, size_h))
             frame = self.correct(frame)
 
-            # print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
+            print(f"\rdesctipt frame: {i}\t\t\t\t", end="")
             tar_kp, tar_des = detect_keypoint(frame[minh:maxh, minw:maxw], self.algorithms[algorithm])
 
             h_c, w_c, *_ = frame[minh:maxh, minw:maxw].shape
-            print( h_c*w_c / size_h/size_w)
-            # print(f"\rmatch frame: {i}\t\t\t\t", end="")
+            print(f"\rmatch frame: {i}\t\t\t\t", end="")
             src_pts, dst_pts, good = match_points(
                 ref_kp, ref_des, 
                 tar_kp, tar_des,
@@ -292,8 +276,7 @@ class MatchMoveWidget(Widget):
                 self.flann_index_kdtree)
 
             if i == 0:
-                # print(f"\save frame: {i}\t\t\t\t", end="")
-                print(len(good))
+                print(f"\save frame: {i}\t\t\t\t", end="")
                 cv2.imwrite(
                     self.save_to(f"keypoints_frame_{algorithm}.png"), 
                     cv2.drawKeypoints(frame, tar_kp, None, flags=4))
@@ -314,7 +297,7 @@ class MatchMoveWidget(Widget):
                     replaced = warp_only(self.destination, frame, H, minh, minw)
                     mask = np.sum(replaced > 0, axis=2, dtype=bool)
 
-                    # print(f"\rreplace frame: {i}\t\t\t\t", end="")
+                    print(f"\rreplace frame: {i}\t\t\t\t", end="")
                     frame = np.where(mask[:,:,None], replaced, frame).astype(np.uint8)
                 
                     mask_id = np.array(np.where(mask))

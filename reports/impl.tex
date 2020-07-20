@@ -8,7 +8,7 @@
 \begin{itemize}
     \item Python 3.7
     \item kivy 1.11.1
-    \item OpenCV-python 3.4.2.16
+    \item OpenCV-Python 3.4.2.16
     \item Numpy 1.19.0
 \end{itemize}
 
@@ -20,13 +20,15 @@ Numpyは数値計算を目的として導入している。
 詳細の実装については\href{https://github.com/SakumaTakuya/cv_finalreport}{GitHubページ}に公開している。
 また、アプリケーションのデモンストレーションは添付した「demo.mp4」を参照されたい。
 
-\subsection{テンプレート画像と差し替え先画像の画像サイズ}
-\subsubsection{ワーピング処理}
+\subsection{画像のワーピング処理}
 本問題では図\ref{fig:question}(a)の頂点ABCDには任意性があるため、単純なリサイズ処理ではテンプレート画像と差し替え先画像のサイズを一致させることができない。
-4点の対応点が与えられるばあにはホモグラフィ行列を用いて変換することが一般的であるが、
-本レポートではワーピング処理によって頂点ABCDを矩形に変換する。
+4点の対応点が与えられる場合にはホモグラフィ行列を用いて変換することが一般的である。
+本レポートでは4頂点の線形補完でのワーピング処理による頂点ABCDの矩形変換と
+ホモグラフィ行列による変換を示す。
 変換によって画像にピクセルの抜けが生じないようにするためInverse warpingを実装する。
-具体的には以下の図\ref{fig:warp}に示す、
+
+\subsubsection{4頂点の線形補完でのワーピング処理}\label{sec:four_warp}
+4頂点の線形補完でのワーピング処理による頂点ABCDの矩形変換は以下の図\ref{fig:warp}に示す、
 四角形MNOP内の任意の点$\bm{p_1}=(x_1, y_1)$から四角形IJKLの対応する点$\bm{p_0}$を求める。
 
 \begin{figure}[h]
@@ -49,9 +51,9 @@ Line-based image warping\cite{}に従って$\bm{x_0}$は以下の式で求める
                 \end{bmatrix}
 \end{equation}
 
-pythonにおける実装は以下のソースコード\ref{py:warp}に示す。
+Pythonにおける実装は以下のソースコード\ref{py:warp}に示す。
 
-\begin{lstlisting}[caption=ワーピング, label=py:warp]
+\begin{lstlisting}[caption=4頂点の線形補完でのワーピング, label=py:warp]
 # 4つの点を指定した影響度でブレンドする関数
 def bilinear(
     value,
@@ -213,9 +215,151 @@ d = \frac{\|(y_t - y_f) x - (x_t - x_f) y + \det{(\bm{f}\bm{t})\|_1}}{\|\bm{f}-\
 この計算により変換先領域の内外判定をする。
 この処理をしなければ変換先の辺を基準とした線対称に無駄な変換が行われてしまう。
 
-95~101行目は式(\ref{eq:warp})にしたがって画素の変換を適用する。
+95から101行目は式(\ref{eq:warp})にしたがって画素の変換を適用する。
 変化した点は整数ではないため、2から14行目で表されるバイリニア補完を行う。
 104から111行目はこの変換を施すために、各画素にどのくらい近いかを割合で計算している。
+
+\subsection{ホモグラフィ行列によるワーピング処理}\label{sec:warp}
+ホモグラフィ行列による変換ではまず、対応する4点からホモグラフィ行列を推定し、
+その行列を利用して、画素ごとに行列積を計算し、ワーピングする。
+ワーピング処理については\ref{sec:replace}で詳細を述べ、
+本節ではホモグラフィ行列の推定アルゴリズムに注目する。
+
+\ref{sec:four_warp}節と同様に点$\bm{p_1}$から点$\bm{p_0}$への変換を求める。
+この時、ホモグラフィ行列$\bm{H}$を使用して、次の式が成り立つ。
+\begin{equation}\label{eq:homo}
+    \begin{bmatrix} 
+        \bm{p_0} \\
+        1
+    \end{bmatrix}    
+    \sim \bm{H}     
+    \begin{bmatrix} 
+        \bm{p_1} \\
+        1
+    \end{bmatrix}  
+\end{equation}
+ここで、式(\ref{eq:homo})におけるスケールファクターを$s$とし、
+各ベクトル及び行列を要素ごとに書くと次式のようになる。
+\begin{equation}\label{eq:homo_elm}
+    \begin{bmatrix} 
+        s x_0 \\ 
+        s y_0 \\
+        s
+    \end{bmatrix} 
+    =
+    \begin{bmatrix}
+        h_{11} & h_{12} & h_{13} \\
+        h_{21} & h_{22} & h_{23} \\
+        h_{31} & h_{32} & 1 \\
+    \end{bmatrix}
+    \begin{bmatrix}
+        x_1 \\ 
+        y_1 \\
+        1
+    \end{bmatrix}
+\end{equation}
+ここで、スケーリングを固定するために$h_{33}=1$としている。
+式(\ref{eq:homo_elm})を分解し、下記の独立な連立方程式を得る。
+\begin{eqnarray}
+    \left\{
+      \begin{array}{l}
+        h_{11} x_1 + h_{12} y_1 + h_13 = (h_{31} x_1 + h_{32} y_1 + 1) x_0 \\
+        h_{21} x_1 + h_{22} y_1 + h_23 = (h_{31} x_1 + h_{32} y_1 + 1) y_0
+      \end{array}
+    \right.
+\end{eqnarray}
+$\bm{H}$の各要素を含む項を左辺に移項し、行列の形に変形することで次式を得る。
+\begin{equation}\label{eq:homo_arr}
+    \begin{bmatrix}
+        x_0 \\ 
+        y_0
+    \end{bmatrix}
+    =
+    \begin{bmatrix} 
+        x_1 & y_1 & 1 & 0 & 0 & 0 & -x_1 x_0 & -y_1 x_0 \\
+        0 & 0 & 0 & x_1 & y_1 & 1 & -x_1 y_0 & -y_1 y_0
+    \end{bmatrix} 
+    \begin{bmatrix}
+        h_{11} \\ h_{12} \\ h_{13} \\
+        h_{21} \\ h_{22} \\ h_{23} \\
+        h_{31} \\ h_{32} \\
+    \end{bmatrix}
+\end{equation}
+式(\ref{eq:homo_arr})から1つの対応点辺り2つの連立方程式が立式できる。
+$\bm{H}$の未知数は8つであることから、4点以上の対応点を与えれば、
+ホモグラフィ行列を導出することができる。
+式(\ref{eq:homo_arr})における、各行列及びベクトルを左から順に$\bm{A}$、$\bm{h}$、$bm{b}$
+と置き、最小二乗法により、$\bm{h}$は次のように導出される。
+\begin{equation}\label{eq:solv}
+    \bm{h} = \bm{A}^{+} \bm{b}
+\end{equation}
+但し、$\bm{A}^{+}$は$\bm{A}$の疑似逆行列を示している。
+
+ソースコード\ref{py:homo}にホモグラフィ行列によるワーピング処理のPython実装を
+示す。
+なお、replace関数はソースコード\ref{py:replace}にて説明する。
+
+\begin{lstlisting}[caption=ホモグラフィ行列によるワーピング, label=py:homo]
+def warp2(    
+    image,
+    from_bottom_left,
+    from_bottom_right,
+    from_top_right,
+    from_top_left,
+    to_bottom_left,
+    to_bottom_right,
+    to_top_right,
+    to_top_left,
+    return_height,
+    return_width):
+    src_points = np.array([
+        to_bottom_left,
+        to_bottom_right,
+        to_top_right,
+        to_top_left])
+
+    dst_points = np.array([
+        from_bottom_left, 
+        from_bottom_right,
+        from_top_right,
+        from_top_left])
+
+    src_x = src_points[:,1]
+    src_y = src_points[:,0]
+    dst_x = dst_points[:,1]
+    dst_y = dst_points[:,0]
+
+    shp = src_x.shape
+    zero = lambda : np.zeros(shp)
+    one = lambda : np.ones(shp)
+
+    fst = np.array([zero(), zero(), zero(), src_x, src_y, one(), -dst_y * src_x, -dst_y * src_y])
+    scd = np.array([src_x, src_y, one(), zero(), zero(), zero(), -dst_x * src_x, -dst_x * src_y])
+
+    # fstとscdを交互にインサートすることでAを作成する
+    A = np.insert(fst, range(fst.shape[1]), scd, axis=1).T
+    b = np.insert(dst_y, range(dst_y.shape[0]), dst_x, axis=0)
+
+    h = (np.linalg.pinv(A) @ b).squeeze()
+    h = np.array([
+        [h[0], h[1], h[2]],
+        [h[3], h[4], h[5]],
+        [h[6], h[7], 1]])
+
+    return replace(
+        image,
+        np.zeros(shape=(return_height, return_width)),
+        h)
+\end{lstlisting}
+ソースコード\ref{py:homo}は
+基本的に式(\ref{eq:homo})から式(\ref{eq:solv})を忠実に実装しているが、
+Numpyの性質を活かすために、
+for文を使用せずテンソルとして処理している。
+34行目のfst及び35行目のscdは式(\ref{eq:homo_arr})における
+奇数行目、及び偶数行目の横ベクトルをそれぞれ作成している。
+その後、38行目に示されるようにnp.insertによって交互に
+横ベクトルを挿入することで、$\bm{A}$を作成している。
+同様にして39行目もnp.insertで交互に挿入し$\bm{b}$を作成する。
 
 \subsubsection{画像サイズの合わせ方}\label{sec:size}
 一致させる画像サイズの決め方は次の二種類の方法が考えられる。
@@ -230,7 +374,7 @@ d = \frac{\|(y_t - y_f) x - (x_t - x_f) y + \det{(\bm{f}\bm{t})\|_1}}{\|\bm{f}-\
 後者については、テンプレート画像のアスペクト比が変化しないため、前者よりも高い精度でマッチングできると考えられる。
 しかし、ユーザが入力した四角形は歪んでおり、元の矩形を復元することができないため、正しい高さ及び幅を取得できない。
 
-それぞれのpythonでの実装は以下の通りである。
+それぞれのPythonでの実装は以下の通りである。
 なお、テンプレート画像の頂点ABCDはtmp\_points、差し替え先画像はdestである。
 \begin{lstlisting}[caption=画像サイズ, label=py:size]
 # 差し替え先画像の高さ・幅に合わせる
@@ -248,7 +392,6 @@ width = np.sqrt(np.sum((tmp_points[2] - tmp_points[1])**2)).astype(np.int16)
 
 このマッチングによってテンプレート画像と適用画像のピクセルの対応を見つけ、
 ホモグラフィ行列を計算することができる。
-本レポートではホモグラフィ行列をOpenCVを利用して算出したため、実装の詳細は省く。
 
 \subsubsection{テンプレートマッチング}
 テンプレートマッチングは画像の画素値そのものを特徴として扱うパターンマッチングの一種である\cite{cv}。
@@ -266,7 +409,7 @@ width = np.sqrt(np.sum((tmp_points[2] - tmp_points[1])**2)).astype(np.int16)
 虚弱であるため、本アプリケーションには適していない。
 そこで、本レポートでは後述する対応点マッチングによって回転やスケールに頑健なマッチングを行う。
 
-\subsection{対応点マッチング}
+\subsubsection{対応点マッチング}
 対応点マッチングは異なる画像間で検出された各特徴点の特徴量を比較することで画像間の対応付けを行う。
 例えば、画像$I_1$及び$I_2$の特徴量を$\bm{x}$及び$\bm{y}$としたとき、その類似度$\mathrm{dist}$はL2ノルムで算出される。
 
@@ -306,7 +449,7 @@ if len(good) > 10:
 11行のように本実装では$r=0.7$としており、条件を満たす点を信頼度の高い対応点として記録する。
 ホモグラフィ行列は対応点を4つ与えることで導出できるが、対応点事態に誤差が存在しているため、それ以上の点を入力し、最小二乗法によって尤もらしい行列を求める。本実装では14行目のように10点以上の対応点を使用する。
 
-\subsection{画像の置換}
+\subsection{画像の置換}\label{sec:replace}
 得られたホモグラフィ行列を各画素に適用することで変換を行う。
 本節ではテンプレート画像から適用画像へのホモグラフィ行列$\bm{H}$を使用して、適用画像を差し替え先画像で置換する実装を示す。
 以下のソースコード\ref{py:replace}に画像置換のPython実装を示す。

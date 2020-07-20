@@ -3,8 +3,8 @@ from kivy.graphics.texture import Texture
 from kivy.properties import ObjectProperty, StringProperty, ListProperty, BooleanProperty, AliasProperty, NumericProperty
 from kivy.uix.popup import Popup
 
-from utils.format import cv2tex_format
-from widgets.loaddialog import LoadDialog
+from .format import cv2tex_format
+from ..widgets.loaddialog import LoadDialog
 
 
 class SelectMixin:

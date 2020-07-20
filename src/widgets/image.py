@@ -5,7 +5,7 @@ from kivy.properties import BooleanProperty
 from kivy.uix.image import Image
 
 
-from logics.operation import cross, diff
+from ..logics.operation import cross, diff
 
 def is_poly(points):    
     vec10 = diff(*points[0],*points[1])

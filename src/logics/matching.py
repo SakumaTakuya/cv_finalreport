@@ -27,7 +27,6 @@ def match_points(
         dst_pts = np.float32([ ref_kp[m[0].trainIdx].pt for m in good ]).reshape(-1,1,2)
         return src_pts, dst_pts, good
     else:
-        print(len(good))
         return None, None, good
 
 
@@ -50,7 +49,7 @@ def match_image(
 
 
 def get_homography(src_points, dst_points):
-    H, _ = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0)
+    H, _ = cv2.findHomography(src_points, dst_points)
     return H
 
 

@@ -11,11 +11,6 @@ def cubic_blend(
     cross_ratio):
     left_ratio = 1-main_ratio
     right_ratio = main_ratio
-    # print(
-    #     f"{value}\n"
-    #     f"+ {(1-cross_ratio)}({left_bottom} {left_ratio} + {right_bottom} {right_ratio})\n"
-    #     f"+ {cross_ratio} ({left_top} * {left_ratio} + {right_top} {right_ratio})\n"
-    # )
     return value \
         + (1-cross_ratio) * (left_bottom * left_ratio + right_bottom * right_ratio) \
         + cross_ratio * (left_top * left_ratio + right_top * right_ratio)

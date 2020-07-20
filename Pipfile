@@ -20,3 +20,7 @@ matplotlib = "*"
 
 [requires]
 python_version = "3.7"
+
+[scripts]
+main = "python main.py main"
+util = "python main.py util"

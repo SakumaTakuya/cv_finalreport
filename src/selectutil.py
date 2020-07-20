@@ -16,15 +16,15 @@ import time
 import threading
 
 # from logics.clip import clip_image
-from logics.operation import cross, diff
-from logics.matching import match_image, get_homography, match_points, detect_keypoint
-from logics.warp import warp_image_liner, replace_image, warp, warp_only
-from utils.file import get_save_path, get_file_name
-from utils.format import cv2tex_format, tex2cv_format
-from utils.kivyevent import sleep, popup_task, forget
-from utils.mixin import SelectMixin, ImageSelectMixin
-from widgets.loaddialog import LoadDialog
-from widgets.image import RectDrawImage
+from .logics.operation import cross, diff
+from .logics.matching import match_image, get_homography, match_points, detect_keypoint
+from .logics.warp import warp_image_liner, replace_image, warp, warp_only
+from .utils.file import get_save_path, get_file_name
+from .utils.format import cv2tex_format, tex2cv_format
+from .utils.kivyevent import sleep, popup_task, forget
+from .utils.mixin import SelectMixin, ImageSelectMixin
+from .widgets.loaddialog import LoadDialog
+from .widgets.image import RectDrawImage
 
 def save_to(to):
     return get_save_path("data", to)
